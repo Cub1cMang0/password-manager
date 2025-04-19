@@ -1,6 +1,7 @@
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import os, sys, shutil
 import json
+import bcrypt
 from base64 import b64encode, b64decode
 import ctypes
 import subprocess
@@ -11,7 +12,48 @@ def hidden_dir(dir_name: str) -> None:
     os.makedirs(dir_name, exist_ok=True)
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetFileAttributesW(dir_name, 0x02)
-    return
+
+def set_master(master_p: str) -> None:
+    user_salt = bcrypt.gensalt()
+    hashed_master = bcrypt.hashpw(master_p.encode(), user_salt)
+    user_salt = b64encode(user_salt).decode("utf-8")
+    hashed_master = b64encode(hashed_master).decode("utf-8")
+    info = {
+        "salt" : user_salt,
+        "hash" : hashed_master
+    }
+    data = []
+    data.append(info)
+    grant_perms(".helper")
+    os.chdir(".helper")
+    with open("master.json", "w") as file:
+        json.dump(data, file, indent=4)
+    os.chdir("..")
+    rm_perms(".helper")
+
+def check_master(password):
+    grant_perms(".helper")
+    os.chdir(".helper")
+    if os.path.exists("master.json"):
+        grant_perms("master.json")
+        with open("master.json", "r") as file:
+            info = json.load(file)
+        user_salt = data["salt"]
+        stored_hash = data["hash"]
+        user_salt = b64decode(user_salt)
+        stored_hash = b64decode(stored_hash)
+        rm_perms("master.json")
+        os.chdir("..")
+        rm_perms(".helper")
+        hashed_pass = bcrypt.hashpw(password.encode(), user_salt)
+        if hashed_pass == stored_hash:
+            return True
+        else:
+            return False
+    else:
+        os.chdir("..")
+        rm_perms(".helper")
+        return False
 
 def rm_perms(item: str) -> None:
     if sys.platform == "win32":
@@ -26,7 +68,19 @@ def grant_perms(item: str):
     else:
         os.chmod(item, stat.S_IXUSR)
 
-class process:
+def lockup() -> None:
+    os.chdir(".helper")
+    rm_perms("main_work.py")
+    os.chdir("..")
+    rm_perms(".helper")
+
+def startup() -> None:
+    grant_perms(".helper")
+    os.chdir(".helper")
+    grant_perms("main_work.py")
+    os.chdir("..")
+
+class manage:
     
     def __init__(self, password: str, description: str):
         if password != None and description != None:
@@ -91,13 +145,7 @@ class process:
 
 
 def main():
-    path_name = ".hidden"
-    file_name = "hello.py"
-    grant_perms(path_name)
-    os.chdir(path_name)
-    grant_perms(file_name)
-    with open("hello.py") as py:
-        exec(py.read())
+    return
     
 
 if __name__ == "__main__":
