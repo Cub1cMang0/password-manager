@@ -24,12 +24,8 @@ def set_master(master_p: str) -> None:
     }
     data = []
     data.append(info)
-    grant_perms(".helper")
-    os.chdir(".helper")
     with open("master.json", "w") as file:
         json.dump(data, file, indent=4)
-    os.chdir("..")
-    rm_perms(".helper")
 
 def check_master(password):
     grant_perms(".helper")
@@ -147,6 +143,5 @@ class manage:
 def main():
     return
     
-
 if __name__ == "__main__":
     main()
