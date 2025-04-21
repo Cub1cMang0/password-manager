@@ -12,17 +12,30 @@ def button_callback():
 def rm_message():
     text_var.set("")
 
+first = first_time()
+
 def set_main():
     prompt = customtkinter.CTkToplevel()
     prompt.title("Setup")
+    prompt.geometry("720x480")
     frame = customtkinter.CTkFrame(prompt)
     frame.pack(padx=20, pady=20, expand=True)
-    question = customtkinter.CTkLabel(frame, text="Before you get started, you need to set up a master password")
+    question = customtkinter.CTkLabel(frame, text=("Before you get started, you need to set up a master password"
+                                                    " to access all of the passwords you will be storing."
+                                                    " Make sure that it's at least 20+ characters long!"
+                                                    "\n (Note: It can be changed later.)" )
+                                            , wraplength=360)
     question.pack(padx=20, pady=20)
     answer = customtkinter.CTkEntry(frame, width=200)
     answer.pack(padx=20, pady=10)
     def submit():
         password = answer.get()
+        if len(password) < 20:
+            question.configure(text="Password is too short! Enter a master password 20+ characters long!", wraplength=360)
+            return
+        elif len(password) > 50:
+            question.configure(text="Bro you are not Mr. President. Enter a master password less than 50+ characters long!", wraplength=360)
+            return
         master(password)
         prompt.destroy()
         app.deiconify()
@@ -32,7 +45,9 @@ def set_main():
 
 app = customtkinter.CTk()
 
-app.withdraw()
+if first:
+    app.withdraw()
+    set_main()
 
 app.geometry("1024x768")
 app.title("Password Manager")
@@ -55,7 +70,5 @@ label = customtkinter.CTkLabel(master=frame, textvariable = text_var,
                             width=120, height=25, fg_color=("black", "gray"), corner_radius=8)
                             
 label.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
-
-set_main()
 
 app.mainloop()

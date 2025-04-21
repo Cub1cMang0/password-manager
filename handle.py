@@ -19,6 +19,15 @@ def master(passyword: str) -> None:
     set_master(passyword)
     os.chdir("..")
 
+def first_time() -> bool:
+    os.chdir(".helper")
+    if os.path.exists("master.json"):
+        os.chdir("..")
+        return False
+    else:
+        os.chdir("..")
+        return True
+
 def main():
     return
 
