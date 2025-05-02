@@ -27,20 +27,22 @@ def set_master(master_p: str) -> None:
     with open("master.json", "w") as file:
         json.dump(data, file, indent=4)
 
-def check_master(password):
+def check_master(password) -> bool:
     grant_perms(".helper")
     os.chdir(".helper")
     if os.path.exists("master.json"):
         grant_perms("master.json")
         with open("master.json", "r") as file:
-            info = json.load(file)
-        user_salt = data["salt"]
-        stored_hash = data["hash"]
+            data = json.load(file)
+        for section in data:
+            user_salt = section["salt"]
+            stored_hash = section["hash"]
         user_salt = b64decode(user_salt)
         stored_hash = b64decode(stored_hash)
         rm_perms("master.json")
         os.chdir("..")
         rm_perms(".helper")
+        password = str(password)
         hashed_pass = bcrypt.hashpw(password.encode(), user_salt)
         if hashed_pass == stored_hash:
             return True
