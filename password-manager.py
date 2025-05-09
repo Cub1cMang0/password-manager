@@ -5,12 +5,24 @@ from math import floor
 import pygetwindow
 
 # Just handling password storage and messages
-def button_callback():
+def successful_storage():
     word = user_pass.get()
     desc = description.get()
     store(word, desc)
     user_input.set("Password has been stored!")
     app.after(2000, rm_message)
+
+def fetch_requested(d: str):
+    show_output.configure(state="normal")
+    output = fetch(d)
+    show_output.delete("0.0", "end")
+    show_output.insert("0.0", output)
+    show_output.configure(state="disable")
+    def clear_output():
+        show_output.configure(state="normal")
+        show_output.delete("0.0", "end")
+        show_output.configure(state="disabled")
+    show_output.after(10000, clear_output)
 
 def rm_message():
     user_input.set("")
@@ -77,9 +89,7 @@ def login() -> None:
     check_password.pack(pady=20)
     prompt.grab_set()
 
-
 app = customtkinter.CTk()
-
 if first:
     app.withdraw()
     set_main()
@@ -106,45 +116,48 @@ user_pass.place(relx=0.5, rely=0.2, anchor=tkinter.CENTER)
 description = customtkinter.CTkEntry(master=entry_frame, placeholder_text="Description", width=200, height=35, border_width=2, corner_radius=10)
 description.place(relx=0.5, rely=0.4, anchor=tkinter.CENTER)
 
-store_button = customtkinter.CTkButton(master=entry_frame, text="Store", command=button_callback)
+store_button = customtkinter.CTkButton(master=entry_frame, text="Store", command=successful_storage)
 store_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
 
-label = customtkinter.CTkLabel(master=entry_frame, textvariable = user_input,
-                            width=120, height=25, fg_color=("black", "gray"), corner_radius=8)
+store_message = customtkinter.CTkLabel(master=entry_frame, textvariable = user_input,
+                            width=120, height=25, corner_radius=8)
                             
-label.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
+store_message.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
 
 storage_frame_w = floor(screen_w * 0.4)
-storage_frame_h = floor(screen_h - (2 * corner_spacing))
+storage_frame_h = floor(screen_h - (screen_h * 0.2))
 storage_frame = customtkinter.CTkFrame(master=app, width=storage_frame_w, height=storage_frame_h, corner_radius=5)
 storage_frame.place(x=(screen_w - storage_frame_w - corner_spacing), y=corner_spacing)
 
-canvas = tkinter.Canvas(storage_frame, width=300, height=200)
-canvas.pack(side="right", fill="both", expand=True)
+idk = floor((screen_h - storage_frame_h) * 0.4)
+show_output = customtkinter.CTkTextbox(master=app, width=storage_frame_w, height=idk)
+show_output.configure(state="disable")
+show_output.place(x=(screen_w - storage_frame_w - corner_spacing), y=storage_frame_h + (2 * corner_spacing))
 
-storage_scrollbar = tkinter.Scrollbar(storage_frame, orient="vertical", command=canvas.yview)
-storage_scrollbar.pack(side="left", fill="y")
-canvas.configure(yscrollcommand=storage_scrollbar.set)
+storage_content = customtkinter.CTkScrollableFrame(
+    master=storage_frame,
+    width=storage_frame_w,
+    height=storage_frame_h,
+    corner_radius=5,
+    fg_color="transparent"
+)
+storage_content.pack(fill="both", expand=True)
 
-storage_content = customtkinter.CTkFrame(canvas)
-canvas.create_window((0, 0), window=storage_content, anchor="nw")
+side_spacing = floor(screen_h * 0.01851)
+upper_spacing = floor(screen_w * 0.009255)
 
-def update_storage(event):
-    canvas.configure(scrollregion=canvas.bbox("all"))
-
-storage_content.bind("<Configure>", update_storage)
-
-print(os.getcwd())
-
+# Pretty much functions to output all the descriptions of passwords and buttons to reveal a corresponding password that fades after 10 seconds
 def dump_desc():
     data = access()
+    storage_content.grid_columnconfigure(0, weight=1)
     for i in range(len(data)):
         desc_label = customtkinter.CTkLabel(storage_content, text=data[i]["desc"])
-        desc_label.pack(pady=5)
+        desc_label.grid(row=i, column=0, sticky="w", padx=side_spacing, pady=upper_spacing)
+        show_button = customtkinter.CTkButton(storage_content, text="Show Password", command=lambda d=data[i]["desc"]: fetch_requested(d))
+        show_button.grid(row=i, column=1, sticky="e", padx=side_spacing, pady=upper_spacing)
 
 exists = present()
 if (exists):
     dump_desc()
 
 app.mainloop()
-
