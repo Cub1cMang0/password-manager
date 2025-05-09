@@ -55,28 +55,26 @@ def check_master(password) -> bool:
 
 def rm_perms(item: str) -> None:
     if sys.platform == "win32":
-        subprocess.run(["icacls", item, "/inheritance:r"], check=True)
-        subprocess.run(["icacls", item, "/deny", "Everyone:F"], check=True)
+        subprocess.run(
+            ["icacls", item, "/inheritance:r"],
+            check=True, 
+            stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["icacls", item, "/deny", "Everyone:F"], 
+            check=True,
+            stdout=subprocess.DEVNULL)
     else:
         os.chmod(item, 0)
 
 def grant_perms(item: str):
     if sys.platform == "win32":
-        subprocess.run(["icacls", item, "/grant", "Everyone:F"], check=True)
+        subprocess.run(
+            ["icacls", item, "/grant", "Everyone:F"], 
+            check=True, 
+            stdout=subprocess.DEVNULL
+        )
     else:
         os.chmod(item, stat.S_IXUSR)
-
-def lockup() -> None:
-    os.chdir(".helper")
-    rm_perms("main_work.py")
-    os.chdir("..")
-    rm_perms(".helper")
-
-def startup() -> None:
-    grant_perms(".helper")
-    os.chdir(".helper")
-    grant_perms("main_work.py")
-    os.chdir("..")
 
 class manage:
     
@@ -129,8 +127,12 @@ class manage:
 
     def load_info(self, description) -> None:
         try:
+            grant_perms(".helper")
+            os.chdir(".helper")
             with open("manager.json", "r") as file:
                 data = json.load(file)
+            os.chdir("..")
+            rm_perms(".helper") 
             for section in data:
                 if section["desc"] == description:
                     self.key = b64decode(section["enc_k"])
