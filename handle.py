@@ -16,6 +16,14 @@ def store(word: str, desc: str) -> None:
         os.chdir("..")
     rm_perms(".helper")
 
+def fetch(desc: str) -> str:
+    yeah = manage(None, None)
+    yeah.load_info(desc)
+    yeah.decrypt()
+    here_it_is = yeah.password.decode()
+    yeah = manage(None, None)
+    return here_it_is
+
 def access():
     grant_perms(".helper")
     os.chdir(".helper")
@@ -56,4 +64,4 @@ def main():
     return
 
 if __name__ == "__main__":
-
+    main()
