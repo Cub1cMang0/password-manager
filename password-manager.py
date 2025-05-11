@@ -4,14 +4,30 @@ from handle import *
 from math import floor
 import pygetwindow
 
-# Just handling password storage and messages
-def successful_storage():
-    word = user_pass.get()
-    desc = description.get()
-    store(word, desc)
-    user_input.set("Password has been stored!")
-    app.after(2000, rm_message)
+# Prompts the user if they are sure with their decision
+def confirm_storage():
+    store_button.place_forget()
+    user_input.set("Are you sure you want to store this password?")
+    def handle_storage(response: int):           # Handles password storage decision
+        if response == 1:
+            word = user_pass.get()
+            desc = description.get()
+            store(word, desc)
+            user_input.set("Password has been stored!")    
+            user_pass.delete(0, 'end')
+            description.delete(0, 'end')
+            app.after(5000, rm_message)
+        if response == 0:
+            rm_message()
+        yes_button.place_forget()
+        no_button.place_forget()
+        store_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
+    yes_button = customtkinter.CTkButton(master=entry_frame, text="Yes", command=lambda response=1: handle_storage(response))
+    yes_button.place(relx=0.35, rely=0.6, anchor=tkinter.CENTER)
+    no_button = customtkinter.CTkButton(master=entry_frame, text="No", command=lambda response=0: handle_storage(response))
+    no_button.place(relx=0.65, rely=0.6, anchor=tkinter.CENTER)
 
+# Fetch the user's requested password in the output textbox and make it disappear after 10 seconds.
 def fetch_requested(d: str):
     show_output.configure(state="normal")
     output = fetch(d)
@@ -103,40 +119,54 @@ screen_h = app.winfo_screenheight()
 app.geometry(f"{screen_w}x{screen_h}")
 app.title("password-manager")
 
+# The frame that contains the area to store passwords
 entry_frame_w = floor(screen_w * 0.3)
 entry_frame_h = floor(screen_h * 0.37)
 entry_frame = customtkinter.CTkFrame(master=app, width=entry_frame_w, height=entry_frame_h, corner_radius=5)
 corner_spacing = floor(screen_w * 0.01302)
 entry_frame.place(x=corner_spacing, y=corner_spacing)
 
+
 user_input = StringVar()
+
+# Entry Frame's password entry
 user_pass = customtkinter.CTkEntry(master=entry_frame, placeholder_text="Password", width=200, height=35, border_width=2, corner_radius=10)
 user_pass.place(relx=0.5, rely=0.2, anchor=tkinter.CENTER)
 
+# Entry Frame's description entry
 description = customtkinter.CTkEntry(master=entry_frame, placeholder_text="Description", width=200, height=35, border_width=2, corner_radius=10)
 description.place(relx=0.5, rely=0.4, anchor=tkinter.CENTER)
 
-store_button = customtkinter.CTkButton(master=entry_frame, text="Store", command=successful_storage)
+# Entry Frame's storage button
+store_button = customtkinter.CTkButton(master=entry_frame, text="Store", command=confirm_storage)
 store_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
 
+# Entry Frame's storage message
 store_message = customtkinter.CTkLabel(master=entry_frame, textvariable = user_input,
-                            width=120, height=25, corner_radius=8)
-                            
+                            width=120, height=25, corner_radius=8)    
 store_message.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
 
+# The frame that contains the area to store passwords
+deletion_frame_w = entry_frame_w
+deletion_frame_h = entry_frame_h
+deletion_frame = customtkinter.CTkFrame(master=app, width=deletion_frame_w, height=deletion_frame_h, corner_radius=5)
+deletion_frame.place(x=corner_spacing, y=deletion_frame_h + (8.15 * corner_spacing))
+
+# The frame that contains the area that displays password descriptions and their show buttons
 storage_frame_w = floor(screen_w * 0.4)
 storage_frame_h = floor(screen_h - (screen_h * 0.2))
 storage_frame = customtkinter.CTkFrame(master=app, width=storage_frame_w, height=storage_frame_h, corner_radius=5)
 storage_frame.place(x=(screen_w - storage_frame_w - corner_spacing), y=corner_spacing)
 
-idk = floor((screen_h - storage_frame_h) * 0.4)
-show_output = customtkinter.CTkTextbox(master=app, width=storage_frame_w, height=idk)
+# Storage Frame's message output box
+show_output = customtkinter.CTkTextbox(master=app, width=storage_frame_w, height=floor((screen_h - storage_frame_h) * 0.4))
 show_output.configure(state="disable")
 show_output.place(x=(screen_w - storage_frame_w - corner_spacing), y=storage_frame_h + (2 * corner_spacing))
 
+# Storage Frame's scrollbar
 storage_content = customtkinter.CTkScrollableFrame(
     master=storage_frame,
-    width=storage_frame_w,
+    width=storage_frame_w - corner_spacing,
     height=storage_frame_h,
     corner_radius=5,
     fg_color="transparent"
@@ -146,7 +176,7 @@ storage_content.pack(fill="both", expand=True)
 side_spacing = floor(screen_h * 0.01851)
 upper_spacing = floor(screen_w * 0.009255)
 
-# Pretty much functions to output all the descriptions of passwords and buttons to reveal a corresponding password that fades after 10 seconds
+# Storage Frame's function to output all the descriptions of passwords and buttons to reveal a corresponding password that fades after 10 seconds
 def dump_desc():
     data = access()
     storage_content.grid_columnconfigure(0, weight=1)
