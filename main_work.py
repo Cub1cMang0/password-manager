@@ -6,6 +6,7 @@ from base64 import b64encode, b64decode
 import ctypes
 import subprocess
 
+# Idk why I have this. I might delete it later since I'll give the user the hidden dir in the repo
 def hidden_dir(dir_name: str) -> None:
     if not dir_name.startswith('.'):
         dir_name = f".{dir_name}"
@@ -13,6 +14,7 @@ def hidden_dir(dir_name: str) -> None:
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetFileAttributesW(dir_name, 0x02)
 
+# Set master password and store it in .helper with no permissions
 def set_master(master_p: str) -> None:
     user_salt = bcrypt.gensalt()
     hashed_master = bcrypt.hashpw(master_p.encode(), user_salt)
@@ -27,9 +29,9 @@ def set_master(master_p: str) -> None:
     with open("master.json", "w") as file:
         json.dump(data, file, indent=4)
 
+# Master password checking logic
 def check_master(password) -> bool:
-    grant_perms(".helper")
-    os.chdir(".helper")
+    enter_helper()
     if os.path.exists("master.json"):
         grant_perms("master.json")
         with open("master.json", "r") as file:
@@ -37,11 +39,11 @@ def check_master(password) -> bool:
         for section in data:
             user_salt = section["salt"]
             stored_hash = section["hash"]
+            break
         user_salt = b64decode(user_salt)
         stored_hash = b64decode(stored_hash)
         rm_perms("master.json")
-        os.chdir("..")
-        rm_perms(".helper")
+        exit_helper()
         password = str(password)
         hashed_pass = bcrypt.hashpw(password.encode(), user_salt)
         if hashed_pass == stored_hash:
@@ -49,10 +51,10 @@ def check_master(password) -> bool:
         else:
             return False
     else:
-        os.chdir("..")
-        rm_perms(".helper")
+        exit_helper()
         return False
 
+# Remvoes file permissions to the given file
 def rm_perms(item: str) -> None:
     if sys.platform == "win32":
         subprocess.run(
@@ -66,6 +68,7 @@ def rm_perms(item: str) -> None:
     else:
         os.chmod(item, 0)
 
+# Grants file permissions to the given file
 def grant_perms(item: str):
     if sys.platform == "win32":
         subprocess.run(
@@ -76,8 +79,18 @@ def grant_perms(item: str):
     else:
         os.chmod(item, stat.S_IXUSR)
 
-class manage:
-    
+# Simple function to reduce the two lines in the function
+def enter_helper():
+    grant_perms(".helper")
+    os.chdir(".helper")
+
+# Simple function to reduce the two lines in the function
+def exit_helper():
+    os.chdir("..")
+    rm_perms(".helper")
+
+# AES algorithm
+class manage:    
     def __init__(self, password: str, description: str):
         if password != None and description != None:
             self.password = password.encode()
@@ -125,14 +138,12 @@ class manage:
         with open("manager.json", "w") as file:
             json.dump(existing, file, indent=4)
 
-    def load_info(self, description) -> None:
+    def load_info(self, description) -> int:
         try:
-            grant_perms(".helper")
-            os.chdir(".helper")
+            enter_helper()
             with open("manager.json", "r") as file:
                 data = json.load(file)
-            os.chdir("..")
-            rm_perms(".helper") 
+            exit_helper()
             for section in data:
                 if section["desc"] == description:
                     self.key = b64decode(section["enc_k"])
@@ -140,8 +151,10 @@ class manage:
                     self.cipher_t = b64decode(section["cipher_t"])
                     self.auth_t = b64decode(section["tag"])
                     self.aesgcm = AESGCM(self.key)
+                    return 1
+            return 0
         except FileNotFoundError:
-            return
+            return 0
 
 
 def main():
