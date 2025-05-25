@@ -1,12 +1,19 @@
 from handle import *
 
-# Working on figuring out if I should require 2FA or ask the user if they would like to set it up?
-
-def yes_no_buttons(framework, conf_type):
+# Used for the main window instead of sub windows
+def big_yes_no_buttons(framework, conf_type):
     yes_button = customtkinter.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
     yes_button.place(relx=0.35, rely=0.6, anchor=tkinter.CENTER)
     no_button = customtkinter.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
     no_button.place(relx=0.65, rely=0.6, anchor=tkinter.CENTER)
+    return yes_button, no_button
+
+# Used for subwindows since the function above doesn't interact well with it.
+def small_yes_no_buttons(framework, conf_type):
+    yes_button = customtkinter.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
+    yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
+    no_button = customtkinter.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
+    no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
     return yes_button, no_button
 
 # Prompts the user if they are sure with their decision of storing their password
@@ -27,7 +34,7 @@ def confirm_storage():
         yes_button.place_forget()
         no_button.place_forget()
         store_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
-    yes_button, no_button = yes_no_buttons(entry_frame, handle_storage)
+    yes_button, no_button = big_yes_no_buttons(entry_frame, handle_storage)
 
 # Prompts the user if they are sure with their decision of deleting their password
 def confirm_deletion():
@@ -47,8 +54,10 @@ def confirm_deletion():
                 app.after(4000, lambda: rm_message(deletion_input))
             else:
                 deletion_input.set("The description or password entered is incorrect")
+        yes_button.place_forget()
+        no_button.place_forget()
         deletion_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
-    yes_button, no_button = yes_no_buttons(deletion_frame, handle_deletion)
+    yes_button, no_button = big_yes_no_buttons(deletion_frame, handle_deletion)
 
 # Fetch the user's requested password in the output textbox and make it disappear after 10 seconds. Also refreshes 10 second timer
 def fetch_requested(d: str):
@@ -74,6 +83,7 @@ def rm_message(message_input):
 
 # Used to set the master password for teh user the first time. Also, gives the user an option to enable 2FA.
 def set_main():
+    twoFA_already = is2FAsetup()
     prompt = customtkinter.CTkToplevel()
     prompt.title("Setup")
     prompt.geometry("720x480")
@@ -98,72 +108,190 @@ def set_main():
         master(password)
         answer.pack_forget()
         submit_b.pack_forget()
-        question.configure(set_m_frame, text="Would you like to enable 2FA? (Note: 2FA is required to reset master password)")
-        def twoFA_decision(decision: int):
-            if decision == 0:
-                prompt.destroy()
-                app.deiconify()
-            if decision == 1:
-                yes_button.pack_forget()
-                no_button.pack_forget()
-                twoFA_key = setup_2FA()
-                qr_code = open_image()
-                qr_code_image = customtkinter.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
-                prompt.geometry("700x790")
-                set_m_frame = customtkinter.CTkFrame(prompt)
-                set_m_frame.pack(padx=20, pady=20, expand=True)
-                question.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", compound="top")
-                twoFA_entry = customtkinter.CTkEntry(master=set_m_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
-                twoFA_entry.pack(padx=20,pady=0)
-                def submit_2FA():
-                    code_2FA = twoFA_entry.get()
-                    successful = check_2FA(code_2FA)
-                    if successful:
-                        prompt.destroy()
-                        app.deiconify()
-                    else:
-                        question.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect Code", compound="top")
-                        twoFA_entry.delete(0, "end")
-                submit_2FA_b = customtkinter.CTkButton(set_m_frame, text="Submit", command=submit_2FA)
-                submit_2FA_b.pack(padx=20, pady=10)
-                question.image = qr_code_image
-        yes_button = customtkinter.CTkButton(master=set_m_frame, text="Yes", command=lambda decision=1: twoFA_decision(decision))
-        yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20) # Use pack for placement
-        no_button = customtkinter.CTkButton(master=set_m_frame, text="No", command=lambda decision=0: twoFA_decision(decision))
-        no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20) # Use pack for placement
+        if twoFA_already:
+            prompt.destroy()
+            app.deiconify()
+        else:
+            question.configure(set_m_frame, text="Would you like to enable 2FA? (Note: 2FA is required to reset master password)")
+            def twoFA_decision(decision: int):
+                if decision == 0:
+                    prompt.destroy()
+                    app.deiconify()
+                if decision == 1:
+                    yes_button.pack_forget()
+                    no_button.pack_forget()
+                    twoFA_key = setup_2FA()
+                    qr_code = open_image()
+                    qr_code_image = customtkinter.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
+                    prompt.geometry("700x790")
+                    set_m_frame = customtkinter.CTkFrame(prompt)
+                    set_m_frame.pack(padx=20, pady=20, expand=True)
+                    question.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", compound="top")
+                    twoFA_entry = customtkinter.CTkEntry(master=set_m_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
+                    twoFA_entry.pack(padx=20,pady=0)
+                    def submit_2FA():
+                        code_2FA = twoFA_entry.get()
+                        successful = check_2FA(code_2FA)
+                        if successful:
+                            prompt.destroy()
+                            app.deiconify()
+                        else:
+                            question.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect Code", compound="top")
+                            twoFA_entry.delete(0, "end")
+                    submit_2FA_b = customtkinter.CTkButton(set_m_frame, text="Submit", command=submit_2FA)
+                    submit_2FA_b.pack(padx=20, pady=10)
+                    question.image = qr_code_image
+            yes_button, no_button = small_yes_no_buttons(set_m_frame, twoFA_decision)
     submit_b = customtkinter.CTkButton(set_m_frame, text="Submit", command=submit)
     submit_b.pack(pady=20)
     prompt.grab_set()
 
-#Of course, the classic master password check to make sure that no one besides the user can get access to the application.
-def login() -> None:
+#Of course, the classic master password check to make sure that no one besides the user can get access to the application. Or use 2FA if the user enabled it
+def main_login() -> None:
     attempt = 0
     prompt = customtkinter.CTkToplevel()
     prompt.title("Login")
     prompt.geometry("720x480")
-    frame = customtkinter.CTkFrame(prompt)
-    frame.pack(padx=20, pady=20, expand=True)
-    check = customtkinter.CTkLabel(frame, text="Please enter your master password", wraplength=360)
-    check.pack(padx=20, pady=20)
-    password_entry = customtkinter.CTkEntry(frame, width=200)
-    password_entry.pack(padx=20, pady=20)
-    def check_attempt():
-        given_password = password_entry.get()
-        correct = check_master(given_password)
-        nonlocal attempt
-        if correct:
-            prompt.destroy()
-            app.deiconify()
-            return
-        else:
-            attempt += 1
-            if attempt == 5:
-                sys.exit()
-            check.configure(text=f"Password is incorrect, you have {5-attempt} left.", wraplength=360)
-    check_password = customtkinter.CTkButton(frame, text="Login", command=check_attempt)
-    check_password.pack(pady=20)
+    def master_login_logic():
+        for child in prompt.winfo_children():
+            child.destroy()
+        frame = customtkinter.CTkFrame(prompt)
+        frame.pack(padx=20, pady=20, expand=True)
+        check = customtkinter.CTkLabel(frame, text="Please enter your master password", wraplength=360)
+        check.pack(padx=20, pady=20)
+        password_entry = customtkinter.CTkEntry(frame, placeholder_text="Enter password here", width=200)
+        password_entry.pack(padx=20, pady=20)
+        def master_login():
+            given_password = password_entry.get()
+            correct = check_master(given_password)
+            nonlocal attempt
+            if correct:
+                prompt.destroy()
+                app.deiconify()
+                return
+            else:
+                attempt += 1
+                if attempt == 5:
+                    sys.exit()
+                check.configure(text=f"Password is incorrect, you have {5-attempt} attempts left.", wraplength=360)
+        check_password = customtkinter.CTkButton(frame, text="Login", command=master_login)
+        check_password.pack(pady=10)
+        use_2FA = customtkinter.CTkButton(frame, text="Login via 2FA", command=login_2FA_logic)
+        use_2FA.pack(pady=10)
+    def login_2FA_logic():
+        for child in prompt.winfo_children():
+            child.destroy()
+        is2FA = is2FAsetup()
+        frame_2FA = customtkinter.CTkFrame(prompt)
+        frame_2FA.pack(padx=20, pady=20, expand=True)
+        if not is2FA:
+            check = customtkinter.CTkLabel(frame_2FA, text="2FA needs to be setup to login via 2FA", wraplength=360)
+            check.pack(padx=20, pady=20)
+            prompt.after(4000, show_master_login)
+        check_twoFA = customtkinter.CTkLabel(frame_2FA, text="Enter the 2FA found in your authenticator to login", wraplength=360)
+        check_twoFA.pack(padx=20, pady=20)
+        twoFA_entry = customtkinter.CTkEntry(frame_2FA, placeholder_text="Enter 2FA code here", width=200)
+        twoFA_entry.pack(padx=20, pady=20)
+        def authenticate_2FA():
+            successful = check_2FA(twoFA_entry.get())
+            if successful:
+                prompt.destroy()
+                app.deiconify()
+            if not successful:
+                check_twoFA.configure(text="Incorrect Code")
+                prompt.after(4000, lambda: check_twoFA.configure(text="Enter the 2FA found in your authenticator to login"))
+                twoFA_entry.delete(0, "end")
+        check_code = customtkinter.CTkButton(frame_2FA, text="Login", command=authenticate_2FA)
+        check_code.pack(pady=10)
+        use_master = customtkinter.CTkButton(frame_2FA, text="Login via master password", command=master_login_logic)
+        use_master.pack(pady=10)
+    master_login_logic()
     prompt.grab_set()
 
+# Asks the user if they are sure with exporting their passwords.
+def confirm_export() -> None:
+    export_prompt = customtkinter.CTkToplevel()
+    export_prompt.title("Export")
+    export_prompt.geometry("720x480")
+    export_frame = customtkinter.CTkFrame(export_prompt)
+    export_frame.pack(padx=20, pady=20, expand=True)
+    export_label = customtkinter.CTkLabel(export_frame, text=("Are you sure you want to export all your stored passwords?"
+                                                             "\n(Note: It's not recommended to keep a file with your passwords in plain text on your computer)"), wraplength=360)
+    export_label.pack(padx=20, pady=20)
+    def export_decision(decision: int) -> None:      # Gives the user the option to, (begrudgingly), export their passwords in a non-encrypted json file for whatever reason
+        if decision == 0:
+            export_prompt.destroy()
+            return
+        if decision == 1:
+            main_info = access()
+            export = []
+            for section in main_info:
+                desc = section["desc"]
+                passy = fetch(desc)
+                data = {
+                    "desc": desc,
+                    "pass": passy
+                }
+                export.append(data)
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                title="export"
+            )
+            if file_path:
+                with open(file_path, "w") as file:
+                    json.dump(export, file, indent=4)
+            export_prompt.destroy()
+        yes_button.pack_forget()
+        no_button.pack_forget()
+    yes_button, no_button = small_yes_no_buttons(export_frame, export_decision)
+    export_prompt.grab_set()
+
+def confirm_reset() -> None:
+    reset_master_prompt = customtkinter.CTkToplevel()
+    reset_master_prompt.title("Reset Master Password")
+    reset_master_prompt.geometry("720x480")
+    reset_master_frame = customtkinter.CTkFrame(reset_master_prompt)
+    reset_master_frame.pack(padx=20, pady=20, expand=True)
+    reset_master_label = customtkinter.CTkLabel(reset_master_frame, text=("Are you sure you want to reset your master password?"
+                                                                        " (Note: 2FA must be enabled to reset your master password)"), wraplength=360)
+    reset_master_label.pack(padx=20, pady=20)
+    def reset_master_decision(decision: int) -> None:
+        if decision == 0:
+            reset_master_prompt.destroy()
+            return
+        if decision == 1:
+            if not is2FAsetup():
+                reset_master_label.configure(text="You must have 2FA enabled to reset your master password!")
+                reset_master_prompt.after(4000, lambda: reset_master_label.configure(text=("Are you sure you want to reset your master password?"
+                                                                                    " (Note: 2FA must be enabled to reset your master password)")), wraplength=360)
+            if is2FAsetup():
+                yes_button.pack_forget()
+                no_button.pack_forget()
+                reset_master_label.pack_forget()
+                for child in reset_master_frame.winfo_children():
+                    child.destroy()
+                reset_master_prompt.geometry("720x480")
+                reset_label = customtkinter.CTkLabel(reset_master_frame, text="Check your authenticator to enter your 2FA code")
+                reset_label.pack(padx=20, pady=20)
+                twoFA_entry = customtkinter.CTkEntry(master=reset_master_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
+                twoFA_entry.pack(padx=20, pady=20)
+                def submit_2FA():
+                    code_2FA = twoFA_entry.get()
+                    successful = check_2FA(code_2FA)
+                    if successful:
+                        reset_master_prompt.destroy()
+                        set_main()
+                    else:
+                        reset_label.configure(text="Incorrect Code")
+                        twoFA_entry.delete(0, "end")
+                submit_2FA_b = customtkinter.CTkButton(reset_master_frame, text="Submit", command=submit_2FA)
+                submit_2FA_b.pack(padx=20, pady=10)
+        yes_button.pack_forget()
+        no_button.pack_forget()
+    yes_button, no_button = small_yes_no_buttons(reset_master_frame, reset_master_decision)
+    reset_master_prompt.grab_set()
+    
 first = first_time()
 
 app = customtkinter.CTk()
@@ -172,13 +300,26 @@ if first:
     set_main()
 else:
     app.withdraw()
-    login()
+    main_login()
 
 screen_w = app.winfo_screenwidth()
 screen_h = app.winfo_screenheight()
 
 app.geometry(f"{screen_w}x{screen_h}")
 app.title("password-manager")
+
+menu_bar = tkinter.Menu(app)
+file_menu = tkinter.Menu(menu_bar, tearoff=0)
+file_menu.add_command(label="Export", command=confirm_export)
+file_menu.add_command(label="Exit", command=lambda: sys.exit())
+
+settings_menu = tkinter.Menu(menu_bar, tearoff=0)
+settings_menu.add_command(label="Reset Master Password", command=confirm_reset)
+
+menu_bar.add_cascade(label="File", menu=file_menu)
+menu_bar.add_cascade(label="Settings", menu=settings_menu)
+app.config(menu=menu_bar)
+
 
 # The frame that contains the area to store passwords
 entry_frame_w = floor(screen_w * 0.3)
