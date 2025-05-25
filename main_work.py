@@ -14,21 +14,6 @@ def hidden_dir(dir_name: str) -> None:
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetFileAttributesW(dir_name, 0x02)
 
-# Set master password and store it in .helper with no permissions
-def set_master(master_p: str) -> None:
-    user_salt = bcrypt.gensalt()
-    hashed_master = bcrypt.hashpw(master_p.encode(), user_salt)
-    user_salt = b64encode(user_salt).decode("utf-8")
-    hashed_master = b64encode(hashed_master).decode("utf-8")
-    info = {
-        "salt" : user_salt,
-        "hash" : hashed_master
-    }
-    data = []
-    data.append(info)
-    with open("master.json", "w") as file:
-        json.dump(data, file, indent=4)
-
 # Master password checking logic
 def check_master(password) -> bool:
     enter_helper()
