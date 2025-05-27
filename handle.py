@@ -17,7 +17,7 @@ def open_image():
     return image
 
 # Provides the user with a QR Code and url to set up 2FA on their phone, computer, or whatever.
-def setup_2FA() -> str:
+def setup_qr_code() -> str:
     key = pyotp.random_base32()
     enter_helper()
     grant_perms("master.json")
@@ -70,6 +70,58 @@ def is2FAsetup() -> bool:
         return False
     elif source != None:
         return True
+
+# 2FA disabling logic
+def disable_2FA() -> None:
+    enter_helper()
+    grant_perms("master.json")
+    with open("master.json", "r") as file:
+        data = json.load(file)
+    salt_holder = ''
+    hash_holder = ''
+    for section in data:
+        if "salt" in section:
+            salt_holder = section["salt"]
+        if "hash" in section:
+            hash_holder = section["hash"]
+    no_2FA_data = {
+        "salt": salt_holder,
+        "hash": hash_holder
+    }
+    new_data = []
+    new_data.append(no_2FA_data)
+    with open("master.json", "w") as file:
+        json.dump(new_data, file, indent=4)
+    rm_perms("master.json")
+    exit_helper()
+
+# Since 2FA can be enabled later and startup, it makes sense to create a function for it
+def setup2FA(yb, nb, app) -> None:
+    yb.pack_forget()
+    nb.pack_forget()
+    twoFA_key = setup_qr_code()
+    qr_code = open_image()
+    qr_code_image = customtkinter.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
+    cur_prompt = customtkinter.CTkToplevel()
+    cur_prompt.geometry("700x790")
+    cur_frame = customtkinter.CTkFrame(cur_prompt)
+    cur_frame.pack(padx=20, pady=20, expand=True)
+    cur_label = customtkinter.CTkLabel(cur_frame, image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", compound="top")
+    cur_label.pack(padx=20, pady=20)
+    twoFA_entry = customtkinter.CTkEntry(cur_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
+    twoFA_entry.pack(padx=20,pady=0)
+    def submit_2FA():
+        code_2FA = twoFA_entry.get()
+        successful = check_2FA(code_2FA)
+        if successful:
+            cur_prompt.destroy()
+            app.deiconify()
+        else:
+            cur_label.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect Code", compound="top")
+            twoFA_entry.delete(0, "end")
+    submit_2FA_b = customtkinter.CTkButton(cur_frame, text="Submit", command=submit_2FA)
+    submit_2FA_b.pack(padx=20, pady=10)
+    cur_label.image = qr_code_image
 
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
@@ -181,6 +233,22 @@ def present() -> bool:
     exists = os.path.exists("manager.json")
     exit_helper()
     return exists
+
+# Used for the main window instead of sub windows
+def big_yes_no_buttons(framework, conf_type):
+    yes_button = customtkinter.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
+    yes_button.place(relx=0.35, rely=0.6, anchor=tkinter.CENTER)
+    no_button = customtkinter.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
+    no_button.place(relx=0.65, rely=0.6, anchor=tkinter.CENTER)
+    return yes_button, no_button
+
+# Used for subwindows since the function above doesn't interact well with it.
+def small_yes_no_buttons(framework, conf_type):
+    yes_button = customtkinter.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
+    yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
+    no_button = customtkinter.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
+    no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
+    return yes_button, no_button
 
 def main():
     enter_helper()
