@@ -2,8 +2,7 @@ from main_work import *
 from math import floor
 import pygetwindow
 import time
-import pyotp
-import qrcode
+import pyotp, qrcode
 import customtkinter, tkinter
 from tkinter import *
 from tkinter import filedialog
@@ -17,21 +16,13 @@ def open_image():
     return image
 
 # Provides the user with a QR Code and url to set up 2FA on their phone, computer, or whatever.
-def setup_qr_code() -> str:
-    key = pyotp.random_base32()
+def setup_qr_code_image() -> str:
     enter_helper()
-    grant_perms("master.json")
-    with open("master.json", "r") as file:
-        data = json.load(file)
-    twoFA = {"2FA" : key}
-    data.append(twoFA)
-    with open("master.json", "w") as file:
-        json.dump(data, file, indent=4)
+    key = pyotp.random_base32()
     uri = pyotp.totp.TOTP(key).provisioning_uri(
         name='2FA',
         issuer_name='PM')
     qrcode.make(uri).save("setup.png")
-    rm_perms("master.json")
     exit_helper()
     return key
 
@@ -99,10 +90,11 @@ def disable_2FA() -> None:
 def setup2FA(yb, nb, app) -> None:
     yb.pack_forget()
     nb.pack_forget()
-    twoFA_key = setup_qr_code()
+    twoFA_key = setup_qr_code_image()
     qr_code = open_image()
     qr_code_image = customtkinter.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
     cur_prompt = customtkinter.CTkToplevel()
+    cur_prompt.title("Setup 2FA")
     cur_prompt.geometry("700x790")
     cur_frame = customtkinter.CTkFrame(cur_prompt)
     cur_frame.pack(padx=20, pady=20, expand=True)
@@ -112,8 +104,19 @@ def setup2FA(yb, nb, app) -> None:
     twoFA_entry.pack(padx=20,pady=0)
     def submit_2FA():
         code_2FA = twoFA_entry.get()
-        successful = check_2FA(code_2FA)
+        totp = pyotp.TOTP(twoFA_key)
+        successful = totp.verify(code_2FA)
         if successful:
+            enter_helper()
+            grant_perms("master.json")
+            with open("master.json", "r") as file:
+                data = json.load(file)
+            twoFA = {"2FA" : twoFA_key}
+            data.append(twoFA)
+            with open("master.json", "w") as file:
+                json.dump(data, file, indent=4)
+            rm_perms("master.json")
+            exit_helper()
             cur_prompt.destroy()
             app.deiconify()
         else:
@@ -123,35 +126,36 @@ def setup2FA(yb, nb, app) -> None:
     submit_2FA_b.pack(padx=20, pady=10)
     cur_label.image = qr_code_image
 
+# Selects an algorithm for the password managing logic (and to stick to)
+def select_base() -> str:
+    letter_range = string.ascii_lowercase[23:25]
+    rand_letter = random.choice(letter_range)
+    return rand_letter
+
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
-    yes = manage(word, desc)
+    enter_helper()
+    yes = Z(word, desc)
     yes.setup()
     yes.encrypt()
-    if os.path.exists(".helper"):
-        enter_helper()
-        yes.save_info()
-        exit_helper()
-    else:
-        hidden_dir(".helper")
-        os.chdir(".helper")
-        yes.save_info()
-        exit_helper()
+    enter_helper()
+    yes.save_info()
+    exit_helper()
 
 # Deletes a password that the user stored. Will return certain numbers depending if it was successful or not.
 def delete(word: str, desc: str) -> int:
-    yes = manage(None, None)
+    yes = Z(None, None)
     success = yes.load_info(desc)
-    if success == 1:
+    if success:
         yes.decrypt()
         check = yes.password.decode()
         if word == check:
             enter_helper()
             with open('manager.json', 'r') as file:
-                data = json.load(file)
-            data = [entry for entry in data if entry.get('desc') != desc]
+                full_data = json.load(file)
+            full_data[0]["data"] = [entry for entry in full_data[0]["data"] if entry.get('description') != desc]
             with open('manager.json', 'w') as file:
-                json.dump(data, file, indent=4)
+                json.dump(full_data, file, indent=4)
             exit_helper()
             return 2
         else:
@@ -161,23 +165,24 @@ def delete(word: str, desc: str) -> int:
 
 # Retrieves password from given description.
 def fetch(desc: str) -> str:
-    yeah = manage(None, None)
+    yeah = Z(None, None)
     success = yeah.load_info(desc)
-    if success == 1:
+    if success:
         yeah.decrypt()
         here_it_is = yeah.password.decode()
-        yeah = manage(None, None)
+        yeah = Z(None, None)
         return here_it_is
     else:
         return ''
 
-# Provides access to manager.json
+# Provides access to manager.json (specifically the sensative stuff)
 def access():
     enter_helper()
     with open("manager.json", "r") as file:
-        data = json.load(file)
+        full_data = json.load(file)
+    data_section = full_data[0]["data"]
     exit_helper()
-    return data
+    return data_section
 
 # Sets the user's master password
 def master(passyword: str) -> None:
@@ -217,6 +222,76 @@ def set_master(master_p: str) -> None:
         rm_perms("master.json")
         exit_helper()
 
+def import_info() -> str:
+    file_path = filedialog.askopenfilename(
+        defaultextension=".json",
+        filetypes=[("JSON files", "*.json")],
+        title="Import",
+        initialfile="export.json"
+    )
+    if file_path:
+        with open(file_path, "r") as file:
+            given_json = json.load(file)
+        method = given_json[0]["yes"]
+        if given_json[0]["exported_by"] == "PM" and (given_json[0]["yes"] in ("z", "y", "x")):
+            passyword_count = len(given_json[0]["data"])
+            for i in range(passyword_count):
+                data_section = given_json[0]["data"][i]
+                try:
+                    assert data_section["description"] not in [None, '']
+                    assert data_section["enc_k"] not in [None, '']
+                    assert data_section["non"] not in [None, '']
+                    assert data_section["cipher_t"] not in [None, '']
+                    assert data_section["tag"] not in [None, '']
+                except AssertionError:
+                    return "The file selected was not exported by this program or has been corrupted"
+    else:
+        message = "The file selected does not exist"
+        return message, file_path
+    enter_helper()
+    file_destination = os.getcwd()
+    file_destination = os.path.join(file_destination, "manager.json")
+    try:
+        shutil.copy2(file_path, file_destination)
+        exit_helper()
+        message = "File successfully imported. Would you like to keep the exported file?"
+    except:
+        message = "The file selected was not exported by this program or has been corrupted"
+    return message, file_path
+
+# Used to export the user's passwords encrypted with warning (its the only way to import passwords)
+def export_info_enc() -> str:
+    message = ''
+    enter_helper()
+    if os.path.exists("manager.json"):
+        with open("manager.json", "r") as file:
+            export = json.load(file)
+        exit_helper()
+        if len(export[0]["data"]) == 0:
+            message = "There are no passwords currently stored"
+            return message
+    else:
+        message = "The file does not exist (Try storing some passwords)"
+        return message
+    main_info = access()
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=".json",
+        filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        title="Export",
+        initialfile="export.json"
+    )
+    if file_path:
+        enter_helper()
+        if message != '':
+            with open(file_path, "w") as file:
+                json.dump(export_data, file, indent=4)
+            message = "File successfully exported"
+        exit_helper()
+    else:
+        message = "The file or path specified does not exist"
+    return message
+
+
 # Used to check if the user has already gone through the setup phase.
 def first_time() -> bool:
     enter_helper()
@@ -242,17 +317,16 @@ def big_yes_no_buttons(framework, conf_type):
     no_button.place(relx=0.65, rely=0.6, anchor=tkinter.CENTER)
     return yes_button, no_button
 
-# Used for subwindows since the function above doesn't interact well with it.
-def small_yes_no_buttons(framework, conf_type):
-    yes_button = customtkinter.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
+# Used for subwindows that provide the user with two options to choose from
+def binary_buttons(framework, conf_type, b1, b2):
+    yes_button = customtkinter.CTkButton(master=framework, text=b1, command=lambda decision=1: conf_type(decision))
     yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
-    no_button = customtkinter.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
+    no_button = customtkinter.CTkButton(master=framework, text=b2, command=lambda decision=0: conf_type(decision))
     no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
     return yes_button, no_button
 
 def main():
-    enter_helper()
-    grant_perms("master.json")
+    select_base()
 
 if __name__ == "__main__":
     main()
