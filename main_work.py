@@ -1,10 +1,14 @@
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import os, sys, shutil
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
+from cryptography.hazmat.backends import default_backend
+import os, sys, shutil, string, random
 import json
 import bcrypt
-from base64 import b64encode, b64decode
 import ctypes
 import subprocess
+from Crypto.Cipher import Blowfish
+from Crypto.Util.Padding import pad, unpad
+import base64
 
 # Idk why I have this. I might delete it later since I'll give the user the hidden dir in the repo
 def hidden_dir(dir_name: str) -> None:
@@ -25,8 +29,8 @@ def check_master(password) -> bool:
             user_salt = section["salt"]
             stored_hash = section["hash"]
             break
-        user_salt = b64decode(user_salt)
-        stored_hash = b64decode(stored_hash)
+        user_salt = user_salt.decode()
+        stored_hash = stored_hash.decode()
         rm_perms("master.json")
         exit_helper()
         password = str(password)
@@ -75,14 +79,14 @@ def exit_helper():
     rm_perms(".helper")
 
 # AES algorithm
-class manage:    
+class Z:    
     def __init__(self, password: str, description: str):
         if password != None and description != None:
             self.password = password.encode()
-            self.desc = description
+            self.description = description
         else:
             self.password = None
-            self.desc = None
+            self.description = None
         self.nonce = None
         self.key = None
         self.aesgcm = None
@@ -105,45 +109,178 @@ class manage:
 
     def save_info(self) -> None:
         data = {
-            "desc" : self.desc,
-            "enc_k" : b64encode(self.key).decode("utf-8"),
-            "non" : b64encode(self.nonce).decode("utf-8"),
-            "cipher_t" : b64encode(self.cipher_t).decode("utf-8"),
-            "tag" : b64encode(self.auth_t).decode("utf-8")
+            "desc": self.description,
+            "enc_k": base64.b64encode(self.key).decode(),
+            "non": base64.b64encode(self.nonce).decode(),
+            "cipher_t": base64.b64encode(self.cipher_t).decode(),
+            "tag": base64.b64encode(self.auth_t).decode()
+        }
+        meta_data = {
+            "exported_by": "PM",
+            "data": [data],
+            "yes": "z"
         }
         if os.path.exists("manager.json"):
             with open("manager.json", "r") as file:
                 try:
                     existing = json.load(file)
+                    existing[0]["data"].append(data)
                 except json.JSONDecodeError:
-                    existing = []
+                    existing = [meta_data]
         else:
-            existing = []
-        existing.append(data)
+            existing = [meta_data]
         with open("manager.json", "w") as file:
             json.dump(existing, file, indent=4)
 
-    def load_info(self, description) -> int:
+    def load_info(self, description: str) -> bool:
         try:
             enter_helper()
             with open("manager.json", "r") as file:
-                data = json.load(file)
+                file_data = json.load(file)
+            data = file_data[0]["data"]
             exit_helper()
             for section in data:
-                if section["desc"] == description:
-                    self.key = b64decode(section["enc_k"])
-                    self.nonce = b64decode(section["non"])
-                    self.cipher_t = b64decode(section["cipher_t"])
-                    self.auth_t = b64decode(section["tag"])
+                if section["description"] == description:
+                    self.key = section["enc_k"]
+                    self.nonce = section["non"]
+                    self.cipher_t = section["cipher_t"]
+                    self.auth_t = section["tag"]
                     self.aesgcm = AESGCM(self.key)
-                    return 1
-            return 0
+                    return True
+            return False
         except FileNotFoundError:
-            return 0
+            return False
+
+class Y:
+    def __init__(self, password: str, description: str):
+        self.password = password.encode()
+        self.description = description
+        self.key = None
+        self.iv = None
+
+    def setup(self) -> None:
+        random_jumble = string.printable
+        self.key = (''.join(random.choices(random_jumble, k=56))).encode()
+
+    def encrypt(self) -> None:
+        cipher = Blowfish.new(self.key, Blowfish.MODE_CBC)
+        self.iv = cipher.iv
+        self.password = cipher.encrypt(pad(self.password, Blowfish.block_size))
+
+    def decrypt(self) -> None:
+        self.password = unpad((Blowfish.new(self.key, Blowfish.MODE_CBC, iv=self.iv)).decrypt(self.password), Blowfish.block_size)
+
+    def save_info(self) -> None:
+        data = {
+            "desc": self.description,
+            "enc_k": base64.b64encode(self.password).decode(),
+            "key": base64.b64encode(self.key).decode(),
+            "iv": base64.b64encode(self.iv).decode()
+        }
+        meta_data = {
+            "exported_by": "PM",
+            "data": [data],
+            "yes": "y"
+        }
+        if os.path.exists("manager.json"):
+            with open("manager.json", "r") as file:
+                try:
+                    existing = json.load(file)
+                    existing[0]["data"].append(data)
+                except json.JSONDecodeError:
+                    existing = [meta_data]
+        else:
+            existing = [meta_data]
+        with open("manager.json", "w") as file:
+            json.dump(existing, file, indent=4)
+
+    def load_info(self, description: str) -> bool:
+        try:
+            enter_helper()
+            with open("manager.json", "r") as file:
+                file_data = json.load(file)
+            data = file_data[0]["data"]
+            exit_helper()
+            for section in data:
+                if section["description"] == description:
+                    self.password = section["enc_k"]
+                    self.key = section["key"]
+                    self.iv = section["iv"]
+                    return True
+            return False
+        except FileNotFoundError:
+            return False
+
+class X:
+    def __init__(self, password: str, description: str):
+        self.password = password.encode()
+        self.description = description
+        self.key = None
+        self.nonce = None
+    
+    def setup(self) -> None:
+        self.key = os.urandom(32)
+        self.nonce = os.urandom(16)
+
+    def encrypt(self) -> None:
+        alg = algorithms.ChaCha20(self.key, self.nonce)
+        ciph = Cipher(alg, mode=None, backend=default_backend())
+        enc = ciph.encryptor()
+        self.password = enc.update(self.password)
+
+    def decrypt(self) -> None:
+        alg = algorithms.ChaCha20(self.key, self.nonce)
+        ciph = Cipher(alg, mode=None, backend=default_backend())
+        dec = ciph.decryptor()
+        self.password = dec.update(self.password)
+
+    def save_info(self) -> None:
+        data = {
+            "desc": self.description,
+            "enc_k": base64.b64encode(self.password).decode(),
+            "key": base64.b64encode(self.key).decode(),
+            "non": base64.b64encode(self.nonce).decode(),
+        }
+        meta_data = {
+            "exported_by": "PM",
+            "data": [data],
+            "yes": "x"
+        }
+        if os.path.exists("manager.json"):
+            with open("manager.json", "r") as file:
+                try:
+                    existing = json.load(file)
+                    existing[0]["data"].append(data)
+                except json.JSONDecodeError:
+                    existing = [meta_data]
+        else:
+            existing = [meta_data]
+        with open("manager.json", "w") as file:
+            json.dump(existing, file, indent=4)
+
+    def load_info(self) -> None:
+        try:
+            enter_helper()
+            with open("manager.json", "r") as file:
+                file_data = json.load(file)
+            data = file_data[0]["data"]
+            exit_helper()
+            for section in data:
+                if section["description"] == description:
+                    self.password = section["enc_k"]
+                    self.key = section["key"]
+                    self.nonce = section["non"]
+                    return True
+            return False
+        except FileNotFoundError:
+            return False
 
 
 def main():
-    return
+    yes = X("Eggs", "Sure")
+    yes.setup()
+    yes.encrypt()
+    yes.save_info()
     
 if __name__ == "__main__":
     main()
