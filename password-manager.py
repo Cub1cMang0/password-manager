@@ -2,14 +2,18 @@ from handle import *
 
 # Prompts the user if they are sure with their decision of storing their password
 def confirm_storage():
+    word = user_pass.get()
+    desc = entry_description.get()
+    if desc == '':
+        entry_input.set("Password descriptions cannot be empty!")
+        app.after(4000, lambda: rm_message(entry_input))
+        return
     store_button.place_forget()
     entry_input.set("Are you sure you want to store this password?")
     def handle_storage(decision: int):           # Handles password storage decision
         if decision == 0:
             rm_message(entry_input)
         if decision == 1:
-            word = user_pass.get()
-            desc = entry_description.get()
             store(word, desc)
             entry_input.set("Password has been stored!")    
             user_pass.delete(0, 'end')
@@ -23,14 +27,18 @@ def confirm_storage():
 
 # Prompts the user if they are sure with their decision of deleting their password
 def confirm_deletion():
+    word = deletion_pass.get()
+    desc = deletion_description.get()
+    if desc == '':
+        deletion_input.set("Password descriptions cannot be empty!")
+        app.after(4000, lambda: rm_message(deletion_input))
+        return
     deletion_button.place_forget()
     deletion_input.set("Are you sure you want to delete this password?")
     def handle_deletion(decision: int):      # Handles password deletion
         if decision == 0:
             rm_message(deletion_input)
         if decision == 1:
-            word = deletion_pass.get()
-            desc = deletion_description.get()
             result = delete(word, desc)
             if result == 2:
                 deletion_input.set("Password has been successfully deleted")
@@ -39,7 +47,7 @@ def confirm_deletion():
                 dump_desc()
                 app.after(4000, lambda: rm_message(deletion_input))
             else:
-                deletion_input.set("The description or password entered is incorrect")
+                deletion_input.set("The password or description entered is incorrect")
         yes_button.place_forget()
         no_button.place_forget()
         deletion_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
@@ -101,12 +109,14 @@ def set_main():
             question.configure(set_m_frame, text="Would you like to enable 2FA? (Note: 2FA is required to reset master password)")
             def twoFA_decision(decision: int):
                 if decision == 0:
+                    update_2FA_status("Disable 2FA")
                     prompt.destroy()
                     app.deiconify()
                 if decision == 1:
                     prompt.destroy()
                     finished = setup2FA(yes_button, no_button, app)
-            yes_button, no_button = small_yes_no_buttons(set_m_frame, twoFA_decision)
+                    update_2FA_status("Enable 2FA")
+            yes_button, no_button = binary_buttons(set_m_frame, twoFA_decision, "Yes", "No")
     submit_b = customtkinter.CTkButton(set_m_frame, text="Submit", command=submit)
     submit_b.pack(pady=20)
     prompt.grab_set()
@@ -186,36 +196,58 @@ def confirm_export() -> None:
     export_frame = customtkinter.CTkFrame(export_prompt)
     export_frame.pack(padx=20, pady=20, expand=True)
     export_label = customtkinter.CTkLabel(export_frame, text=("Are you sure you want to export all your stored passwords?"
-                                                             "\n(Note: It's not recommended to keep a file with your passwords in plain text on your computer)"), wraplength=360)
+                                                             "\n(Warning: It's recommended to keep the file in a safe location)"), wraplength=360)
     export_label.pack(padx=20, pady=20)
-    def export_decision(decision: int) -> None:      # Gives the user the option to, (begrudgingly), export their passwords in a non-encrypted json file for whatever reason
+    def export_decision(decision: int) -> None:      # Gives the user the option to export their passwords.
         if decision == 0:
             export_prompt.destroy()
             return
         if decision == 1:
-            main_info = access()
-            export = []
-            for section in main_info:
-                desc = section["desc"]
-                passy = fetch(desc)
-                data = {
-                    "desc": desc,
-                    "pass": passy
-                }
-                export.append(data)
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".json",
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                title="export"
-            )
-            if file_path:
-                with open(file_path, "w") as file:
-                    json.dump(export, file, indent=4)
-            export_prompt.destroy()
+            message = export_info_enc()
+            export_label.configure(text=message)
+            ok_button = customtkinter.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
+            ok_button.pack(padx=20, pady=20)
         yes_button.pack_forget()
         no_button.pack_forget()
-    yes_button, no_button = small_yes_no_buttons(export_frame, export_decision)
+    yes_button, no_button = binary_buttons(export_frame, export_decision, "Yes", "No")
     export_prompt.grab_set()
+
+# Gives the user the option to import their passwords from a previously exported file.
+def confirm_import() -> None:
+    import_prompt = customtkinter.CTkToplevel()
+    import_prompt.title("Import")
+    import_prompt.geometry("720x480")
+    import_frame = customtkinter.CTkFrame(import_prompt)
+    import_frame.pack(padx=20, pady=20, expand=True)
+    import_label = customtkinter.CTkLabel(import_frame, text=("Are you sure you want to import passwords from a previously exported file?"
+                                                             " (Note: It has to have been a file exported from this program)"), wraplength=360)
+    import_label.pack(padx=20, pady=20)
+    def import_decision(decision: int) -> None:
+        if decision == 0:
+            import_prompt.destroy()
+            return
+        if decision == 1:
+            message, file = import_info()
+            import_label.configure(text=message)
+            yes_button.pack_forget()
+            no_button.pack_forget()
+            if file == '':
+                import_prompt.destroy()
+            else:
+                dump_desc()
+                def destroy_export_decision(decision: int) -> None:
+                    if decision == 0:
+                        import_prompt.destroy()
+                        return
+                    if decision == 1:
+                        os.remove(file)
+                        import_prompt.destroy()
+                keep_button = customtkinter.CTkButton(master=import_frame, text="Keep", command=lambda decision=0: destroy_export_decision(decision))
+                keep_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
+                delete_button = customtkinter.CTkButton(master=import_frame, text="Delete", command=lambda decision=1: destroy_export_decision(decision))
+                delete_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
+    yes_button, no_button = binary_buttons(import_frame, import_decision, "Yes", "No")
+    import_prompt.grab_set()
 
 def confirm_reset() -> None:
     reset_master_prompt = customtkinter.CTkToplevel()
@@ -257,7 +289,7 @@ def confirm_reset() -> None:
                         twoFA_entry.delete(0, "end")
                 submit_2FA_b = customtkinter.CTkButton(reset_master_frame, text="Submit", command=submit_2FA)
                 submit_2FA_b.pack(padx=20, pady=10)
-    yes_button, no_button = small_yes_no_buttons(reset_master_frame, reset_master_decision)
+    yes_button, no_button = binary_buttons(reset_master_frame, reset_master_decision, "Yes", "No")
     reset_master_prompt.grab_set()
     
 # Gives the user the option to (begrudgingly) disable 2FA 
@@ -283,9 +315,10 @@ def confirm_disable_2FA() -> None:
             disable_success_label.pack(padx=20, pady=20)
             ok_button = customtkinter.CTkButton(disable_2FA_frame, text="Ok", command= lambda: disable_2FA_prompt.destroy())
             ok_button.pack(padx=20, pady=20)
+            update_2FA_status("Disable 2FA")
         yes_button.pack_forget()
         no_button.pack_forget()
-    yes_button, no_button = small_yes_no_buttons(disable_2FA_frame, disable_2FA_decision)
+    yes_button, no_button = binary_buttons(disable_2FA_frame, disable_2FA_decision, "Yes", "No")
     disable_2FA_prompt.grab_set()
 
 # Gives the user the option to enable 2FA if they didn't during the setup
@@ -304,8 +337,29 @@ def confirm_enable_2FA() -> None:
         if decision == 1:
             enable_2FA_prompt.destroy()
             setup2FA(yes_button, no_button, app)
-    yes_button, no_button = small_yes_no_buttons(enable_2FA_frame, enable_2FA_decision)
+            update_2FA_status("Enable 2FA")
+    yes_button, no_button = binary_buttons(enable_2FA_frame, enable_2FA_decision, "Yes", "No")
     enable_2FA_prompt.grab_set()
+
+def desc_search(event):
+    entry_widget = event.widget
+    search_desc = entry_widget.get()
+    if search_desc == '':
+        dump_desc()
+    data = access()
+    for child in storage_content.winfo_children():
+        child.destroy()
+    storage_content.grid_columnconfigure(0, weight=1)
+    for i in range(len(data)):
+        try:
+            current_desc = data[i]["desc"]
+            if search_desc in current_desc:
+                desc_label = customtkinter.CTkLabel(storage_content, text=current_desc)
+                desc_label.grid(row=i, column=0, sticky="w", padx=side_spacing, pady=upper_spacing)
+                show_button = customtkinter.CTkButton(storage_content, text="Show Password", command=lambda d=current_desc: fetch_requested(d))
+                show_button.grid(row=i, column=1, sticky="e", padx=side_spacing, pady=upper_spacing)
+        except KeyError:        # I realized that this would happen if the user enters the app without any passwords stored.
+            return
 
 first = first_time()
 
@@ -352,7 +406,7 @@ store_message.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
 deletion_frame_w = entry_frame_w
 deletion_frame_h = entry_frame_h
 deletion_frame = customtkinter.CTkFrame(master=app, width=deletion_frame_w, height=deletion_frame_h, corner_radius=5)
-deletion_frame.place(x=corner_spacing, y=deletion_frame_h + (8.15 * corner_spacing))
+deletion_frame.place(x=corner_spacing, y=deletion_frame_h + (7.2 * corner_spacing))
 
 deletion_input = StringVar()
 
@@ -370,14 +424,18 @@ deletion_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
 
 # The frame that contains the area that displays password descriptions and their show buttons
 storage_frame_w = floor(screen_w * 0.4)
-storage_frame_h = floor(screen_h - (screen_h * 0.2))
+storage_frame_h = floor(screen_h - (screen_h * 0.27))
 storage_frame = customtkinter.CTkFrame(master=app, width=storage_frame_w, height=storage_frame_h, corner_radius=5)
 storage_frame.place(x=(screen_w - storage_frame_w - corner_spacing), y=corner_spacing)
 
 # Storage Frame's message output box
-show_output = customtkinter.CTkTextbox(master=app, width=storage_frame_w, height=floor((screen_h - storage_frame_h) * 0.4))
+show_output = customtkinter.CTkTextbox(master=app, width=(storage_frame_w), height=floor((screen_h - storage_frame_h) * 0.31))
 show_output.configure(state="disable")
-show_output.place(x=(screen_w - storage_frame_w - corner_spacing), y=storage_frame_h + (2 * corner_spacing))
+show_output.place(x=(screen_w - storage_frame_w - corner_spacing), y=(screen_h * 0.82))
+
+search_bar = customtkinter.CTkEntry(master=storage_frame, width=(storage_frame_w * 0.97), placeholder_text="🔍 Search")
+search_bar.pack(padx=10, pady=10)
+search_bar.bind("<Return>", desc_search)
 
 # Storage Frame's scrollbar
 storage_content = customtkinter.CTkScrollableFrame(
@@ -413,16 +471,40 @@ if (exists):
 
 menu_bar = tkinter.Menu(app)
 file_menu = tkinter.Menu(menu_bar, tearoff=0)
+file_menu.add_command(label="Import", command=confirm_import)
 file_menu.add_command(label="Export", command=confirm_export)
 file_menu.add_command(label="Exit", command=lambda: sys.exit())
 
 settings_menu = tkinter.Menu(menu_bar, tearoff=0)
+
+# Needs to use static array of commands and their names because of how tkinter handles tcl commands
+settings_items = [
+    ("Enable 2FA", confirm_enable_2FA),
+    ("Disable 2FA", confirm_disable_2FA),
+    ("Reset Master Password", confirm_reset)
+]
+
+# Pretty much used to dynamically update the 2FA options in the settings options
+def update_2FA_status(twoFA_option: str):
+    global settings_items
+    updated_menu = []
+    if twoFA_option == "Enable 2FA":
+        updated_menu.append(("Disable 2FA", confirm_disable_2FA))
+    else:
+        updated_menu.append(("Enable 2FA", confirm_enable_2FA))
+    for title, cmd in settings_items:
+        if title not in ("Enable 2FA", "Disable 2FA"):
+            updated_menu.append((title, cmd))
+    settings_items = updated_menu
+    settings_menu.delete(0, 'end')
+    for title, cmd in settings_items:
+        settings_menu.add_command(label=title, command=cmd)
+
 if is2FAsetup():
     settings_menu.add_command(label="Disable 2FA", command=confirm_disable_2FA)
 else:
     settings_menu.add_command(label="Enable 2FA", command=confirm_enable_2FA)
 settings_menu.add_command(label="Reset Master Password", command=confirm_reset)
-
 menu_bar.add_cascade(label="File", menu=file_menu)
 menu_bar.add_cascade(label="Settings", menu=settings_menu)
 app.config(menu=menu_bar)
