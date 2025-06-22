@@ -7,9 +7,9 @@ import customtkinter, tkinter
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image
-
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
+
     enter_helper()
     image = Image.open("setup.png")
     exit_helper()
@@ -132,19 +132,42 @@ def select_base() -> str:
     rand_letter = random.choice(letter_range)
     return rand_letter
 
+def check_base() -> str:
+    enter_helper()
+    if os.path.exists("manager.json"):
+        with open("manager.json", "r") as file:
+            data = json.load(file)
+        base = data[0]["yes"]
+    else:
+        base = select_base()
+    exit_helper()
+    return base
+
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
+    base = check_base()
     enter_helper()
-    yes = Z(word, desc)
+    if base == "z":
+        yes = PM_Z(word, desc)
+    elif base == "y":
+        yes = PM_Y(word, desc)
+    elif base == "x":
+        yes = PM_X(word, desc)
     yes.setup()
     yes.encrypt()
-    enter_helper()
     yes.save_info()
     exit_helper()
 
+
 # Deletes a password that the user stored. Will return certain numbers depending if it was successful or not.
 def delete(word: str, desc: str) -> int:
-    yes = Z(None, None)
+    base = check_base()
+    if base == "z":
+        yes = PM_Z(None, None)
+    elif base == "y":
+        yes = PM_Y(None, None)
+    elif base == "x":
+        yes = PM_X(None, None)
     success = yes.load_info(desc)
     if success:
         yes.decrypt()
@@ -153,7 +176,7 @@ def delete(word: str, desc: str) -> int:
             enter_helper()
             with open('manager.json', 'r') as file:
                 full_data = json.load(file)
-            full_data[0]["data"] = [entry for entry in full_data[0]["data"] if entry.get('description') != desc]
+            full_data[0]["data"] = [entry for entry in full_data[0]["data"] if entry.get('desc') != desc]
             with open('manager.json', 'w') as file:
                 json.dump(full_data, file, indent=4)
             exit_helper()
@@ -165,12 +188,17 @@ def delete(word: str, desc: str) -> int:
 
 # Retrieves password from given description.
 def fetch(desc: str) -> str:
-    yeah = Z(None, None)
-    success = yeah.load_info(desc)
+    base = check_base()
+    if base == "z":
+        yes = PM_Z(None, None)
+    elif base == "y":
+        yes = PM_Y(None, None)
+    elif base == "x":
+        yes = PM_X(None, None)
+    success = yes.load_info(desc)
     if success:
-        yeah.decrypt()
-        here_it_is = yeah.password.decode()
-        yeah = Z(None, None)
+        yes.decrypt()
+        here_it_is = yes.password.decode()
         return here_it_is
     else:
         return ''
@@ -222,7 +250,8 @@ def set_master(master_p: str) -> None:
         rm_perms("master.json")
         exit_helper()
 
-def import_info() -> str:
+# Import a file containing password (that was exported from the program) and give the user to merge passwords or override.
+def import_info(merge_decision) -> str:
     file_path = filedialog.askopenfilename(
         defaultextension=".json",
         filetypes=[("JSON files", "*.json")],
@@ -234,29 +263,104 @@ def import_info() -> str:
             given_json = json.load(file)
         method = given_json[0]["yes"]
         if given_json[0]["exported_by"] == "PM" and (given_json[0]["yes"] in ("z", "y", "x")):
+            base = given_json[0]["yes"]
             passyword_count = len(given_json[0]["data"])
             for i in range(passyword_count):
                 data_section = given_json[0]["data"][i]
-                try:
-                    assert data_section["description"] not in [None, '']
-                    assert data_section["enc_k"] not in [None, '']
-                    assert data_section["non"] not in [None, '']
-                    assert data_section["cipher_t"] not in [None, '']
-                    assert data_section["tag"] not in [None, '']
-                except AssertionError:
-                    return "The file selected was not exported by this program or has been corrupted"
+                if base == "z":
+                    try:
+                        assert data_section["desc"] not in [None, '']
+                        assert data_section["enc_k"] not in [None, '']
+                        assert data_section["non"] not in [None, '']
+                        assert data_section["cipher_t"] not in [None, '']
+                        assert data_section["tag"] not in [None, '']
+                    except AssertionError:
+                        return "The file selected was not exported by this program or has been corrupted"
+                elif base == "y":
+                    try:
+                        assert data_section["desc"] not in [None, '']
+                        assert data_section["enc_k"] not in [None, '']
+                        assert data_section["key"] not in [None, '']
+                        assert data_section["iv"] not in [None, '']
+                    except AssertionError:
+                        return "The file selected was not exported by this program or has been corrupted"
+                elif base == "x":
+                    try:
+                        assert data_section["desc"] not in [None, '']
+                        assert data_section["enc_k"] not in [None, '']
+                        assert data_section["key"] not in [None, '']
+                        assert data_section["non"] not in [None, '']
+                    except AssertionError:
+                        return "The file selected was not exported by this program or has been corrupted"
     else:
         message = "The file selected does not exist"
         return message, file_path
-    enter_helper()
-    file_destination = os.getcwd()
-    file_destination = os.path.join(file_destination, "manager.json")
-    try:
-        shutil.copy2(file_path, file_destination)
-        exit_helper()
+    if merge_decision:
+        file_base = check_base()
+        export_base = given_json[0]["yes"]
+        export_data = given_json[0]["data"]
+        try:
+            enter_helper()
+            with open("manager.json", "r") as file:
+                file_data = json.load(file)
+            exit_helper()
+        except FileNotFoundError:
+            file_destination = os.getcwd()
+            file_destination = os.path.join(file_destination, "manager.json")
+            try:
+                shutil.copy2(file_path, file_destination)
+                message = "File successfully imported. Would you like to keep the exported file?"
+                exit_helper()
+            except:
+                message = "The file selected was not exported by this program or has been corrupted"
+            return message, file_path
+        current_descs = [desc.get('desc') for desc in file_data[0]["data"]]
+        current_descs = set(current_descs)
+        for data_section in export_data:
+            description = data_section["desc"]
+            if description in current_descs:
+                if file_base == "z":
+                    yes = PM_Z(None, None)
+                elif file_base == "y":
+                    yes = PM_Y(None, None)
+                elif file_base == "x":
+                    yes = PM_X(None, None)
+                yes.load_info(description)
+                yes.decrypt()
+                passyword = yes.password.decode()
+                description = description + " (imported)"
+            else:
+                if export_base == "z":
+                    yes = PM_Z(None, None)
+                    yes.key = data_section["key"]
+                    yes.nonce = data_section["non"]
+                    yes.cipher_t = data_section["cipher_t"]
+                    yes.auth_t = data_section["tag"]
+                elif export_base == "y":
+                    yes = PM_Y(None, None)
+                    yes.password = base64.b64decode(data_section["enc_k"])
+                    yes.key = base64.b64decode(data_section["key"])
+                    yes.iv = base64.b64decode(data_section["iv"])
+                elif export_base == "x":
+                    yes = PM_X(None, None)
+                    yes.password = base64.b64decode(data_section["enc_k"])
+                    yes.key = base64.b64decode(data_section["key"])
+                    yes.nonce = base64.b64decode(data_section["non"])
+                yes.description = data_section["desc"]
+                yes.decrypt()
+                passyword = yes.password.decode()
+            store(passyword, description)
         message = "File successfully imported. Would you like to keep the exported file?"
-    except:
-        message = "The file selected was not exported by this program or has been corrupted"
+    elif not merge_decision:
+        enter_helper()
+        file_destination = os.getcwd()
+        file_destination = os.path.join(file_destination, "manager.json")
+        try:
+            shutil.copy2(file_path, file_destination)
+            message = "File successfully imported. Would you like to keep the exported file?"
+            exit_helper()
+        except:
+            message = "The file selected was not exported by this program or has been corrupted"
     return message, file_path
 
 # Used to export the user's passwords encrypted with warning (its the only way to import passwords)
@@ -282,14 +386,13 @@ def export_info_enc() -> str:
     )
     if file_path:
         enter_helper()
-        if message != '':
-            with open(file_path, "w") as file:
-                json.dump(export_data, file, indent=4)
-            message = "File successfully exported"
+        with open(file_path, "w") as file:
+            json.dump(export, file, indent=4)
+        message = "File successfully exported"
         exit_helper()
     else:
         message = "The file or path specified does not exist"
-    return message
+    return message, file_path
 
 
 # Used to check if the user has already gone through the setup phase.
@@ -326,7 +429,7 @@ def binary_buttons(framework, conf_type, b1, b2):
     return yes_button, no_button
 
 def main():
-    select_base()
+    grant_perms(".helper")
 
 if __name__ == "__main__":
     main()
