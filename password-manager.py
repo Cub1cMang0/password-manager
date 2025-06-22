@@ -203,10 +203,13 @@ def confirm_export() -> None:
             export_prompt.destroy()
             return
         if decision == 1:
-            message = export_info_enc()
-            export_label.configure(text=message)
-            ok_button = customtkinter.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
-            ok_button.pack(padx=20, pady=20)
+            message, file = export_info_enc()
+            if file == '':
+                export_prompt.destroy()
+            else:
+                export_label.configure(text=message)
+                ok_button = customtkinter.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
+                ok_button.pack(padx=20, pady=20)
         yes_button.pack_forget()
         no_button.pack_forget()
     yes_button, no_button = binary_buttons(export_frame, export_decision, "Yes", "No")
@@ -219,33 +222,37 @@ def confirm_import() -> None:
     import_prompt.geometry("720x480")
     import_frame = customtkinter.CTkFrame(import_prompt)
     import_frame.pack(padx=20, pady=20, expand=True)
-    import_label = customtkinter.CTkLabel(import_frame, text=("Are you sure you want to import passwords from a previously exported file?"
-                                                             " (Note: It has to have been a file exported from this program)"), wraplength=360)
+    import_label = customtkinter.CTkLabel(import_frame, text=("Are you sure you want to import passwords from a previously exported file?"), wraplength=360)
     import_label.pack(padx=20, pady=20)
     def import_decision(decision: int) -> None:
         if decision == 0:
             import_prompt.destroy()
             return
         if decision == 1:
-            message, file = import_info()
-            import_label.configure(text=message)
+            import_label.configure(text="Do you want to merge the passwords found in both files or override the current one with the export?")
             yes_button.pack_forget()
             no_button.pack_forget()
-            if file == '':
-                import_prompt.destroy()
-            else:
-                dump_desc()
-                def destroy_export_decision(decision: int) -> None:
-                    if decision == 0:
-                        import_prompt.destroy()
-                        return
-                    if decision == 1:
-                        os.remove(file)
-                        import_prompt.destroy()
-                keep_button = customtkinter.CTkButton(master=import_frame, text="Keep", command=lambda decision=0: destroy_export_decision(decision))
-                keep_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
-                delete_button = customtkinter.CTkButton(master=import_frame, text="Delete", command=lambda decision=1: destroy_export_decision(decision))
-                delete_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
+            def merge_decision(decision: int) -> None:
+                if decision == 1:
+                    message, file = import_info(True)
+                if decision == 0:
+                    message, file = import_info(False)
+                import_label.configure(text=message)
+                if file == '':
+                    import_prompt.destroy()
+                else:
+                    merge_button.pack_forget()
+                    override_button.pack_forget()
+                    dump_desc()
+                    def destroy_export_decision(decision: int) -> None:
+                        if decision == 1:
+                            import_prompt.destroy()
+                            return
+                        if decision == 0:
+                            os.remove(file)
+                            import_prompt.destroy()
+                    keep_button, delete_button = binary_buttons(import_frame, destroy_export_decision, "Keep", "Delete")
+            merge_button, override_button = binary_buttons(import_frame, merge_decision, "Merge", "Override")
     yes_button, no_button = binary_buttons(import_frame, import_decision, "Yes", "No")
     import_prompt.grab_set()
 
@@ -504,6 +511,7 @@ if is2FAsetup():
     settings_menu.add_command(label="Disable 2FA", command=confirm_disable_2FA)
 else:
     settings_menu.add_command(label="Enable 2FA", command=confirm_enable_2FA)
+    
 settings_menu.add_command(label="Reset Master Password", command=confirm_reset)
 menu_bar.add_cascade(label="File", menu=file_menu)
 menu_bar.add_cascade(label="Settings", menu=settings_menu)
