@@ -29,8 +29,8 @@ def check_master(password) -> bool:
             user_salt = section["salt"]
             stored_hash = section["hash"]
             break
-        user_salt = user_salt.decode()
-        stored_hash = stored_hash.decode()
+        user_salt = base64.b64decode(user_salt)
+        stored_hash = base64.b64decode(stored_hash)
         rm_perms("master.json")
         exit_helper()
         password = str(password)
@@ -79,7 +79,7 @@ def exit_helper():
     rm_perms(".helper")
 
 # AES algorithm
-class Z:    
+class PM_Z:    
     def __init__(self, password: str, description: str):
         if password != None and description != None:
             self.password = password.encode()
@@ -140,7 +140,7 @@ class Z:
             data = file_data[0]["data"]
             exit_helper()
             for section in data:
-                if section["description"] == description:
+                if section["desc"] == description:
                     self.key = section["enc_k"]
                     self.nonce = section["non"]
                     self.cipher_t = section["cipher_t"]
@@ -151,15 +151,19 @@ class Z:
         except FileNotFoundError:
             return False
 
-class Y:
+class PM_Y:
     def __init__(self, password: str, description: str):
-        self.password = password.encode()
-        self.description = description
+        if password != None and description != None:
+            self.password = password.encode()
+            self.description = description
+        else:
+            self.password = None
+            self.description = None
         self.key = None
         self.iv = None
 
     def setup(self) -> None:
-        random_jumble = string.printable
+        random_jumble = string.ascii_letters + string.digits + string.punctuation
         self.key = (''.join(random.choices(random_jumble, k=56))).encode()
 
     def encrypt(self) -> None:
@@ -202,19 +206,23 @@ class Y:
             data = file_data[0]["data"]
             exit_helper()
             for section in data:
-                if section["description"] == description:
-                    self.password = section["enc_k"]
-                    self.key = section["key"]
-                    self.iv = section["iv"]
+                if section["desc"] == description:
+                    self.password = base64.b64decode(section["enc_k"])
+                    self.key = base64.b64decode(section["key"])
+                    self.iv = base64.b64decode(section["iv"])
                     return True
             return False
         except FileNotFoundError:
             return False
 
-class X:
+class PM_X:
     def __init__(self, password: str, description: str):
-        self.password = password.encode()
-        self.description = description
+        if password != None and description != None:
+            self.password = password.encode()
+            self.description = description
+        else:
+            self.password = None
+            self.description = None
         self.key = None
         self.nonce = None
     
@@ -258,7 +266,7 @@ class X:
         with open("manager.json", "w") as file:
             json.dump(existing, file, indent=4)
 
-    def load_info(self) -> None:
+    def load_info(self, description: str) -> bool:
         try:
             enter_helper()
             with open("manager.json", "r") as file:
@@ -266,21 +274,17 @@ class X:
             data = file_data[0]["data"]
             exit_helper()
             for section in data:
-                if section["description"] == description:
-                    self.password = section["enc_k"]
-                    self.key = section["key"]
-                    self.nonce = section["non"]
+                if section["desc"] == description:
+                    self.password = base64.b64decode(section["enc_k"])
+                    self.key = base64.b64decode(section["key"])
+                    self.nonce = base64.b64decode(section["non"])
                     return True
             return False
         except FileNotFoundError:
             return False
 
-
 def main():
-    yes = X("Eggs", "Sure")
-    yes.setup()
-    yes.encrypt()
-    yes.save_info()
-    
+    return
+
 if __name__ == "__main__":
     main()
