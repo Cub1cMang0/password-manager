@@ -368,6 +368,43 @@ def desc_search(event):
         except KeyError:        # I realized that this would happen if the user enters the app without any passwords stored.
             return
 
+# Give the user the option to update their password itself, the description, or both.
+def update_info(description: str) -> None:
+    update_prompt = customtkinter.CTkToplevel()
+    update_prompt.title("Update password information")
+    update_prompt.geometry("720x480")
+    update_frame = customtkinter.CTkFrame(update_prompt)
+    update_frame.pack(padx=20, pady=20, expand=True)
+    og_passyword = fetch(description)
+    og_description = description
+    passyword_sv = customtkinter.StringVar(value=og_passyword)
+    description_sv = customtkinter.StringVar(value=og_description)
+    def entry_change(*args):
+        if len(passyword_entry.get()) == 0 or len(description_entry.get()) == 0:
+            save_button.configure(state="disabled", fg_color="gray")
+        elif passyword_entry.get() != og_passyword or description_entry.get() != og_description:
+            save_button.configure(state="normal", fg_color="#1f6aa5")
+        else:
+            save_button.configure(state="disabled", fg_color="gray")
+    passyword_sv.trace_add("write", entry_change)
+    description_sv.trace_add("write", entry_change)
+    passyword_entry = customtkinter.CTkEntry(update_frame, width=200, height=35, textvariable=passyword_sv)
+    passyword_entry.pack(padx=20, pady=20)
+    description_entry = customtkinter.CTkEntry(update_frame, width=200, height=35, textvariable=description_sv)
+    description_entry.pack(padx=20, pady=20)
+    def update_info_decision(decision: int) -> None:
+        if decision == 1:
+            new_passyword = passyword_entry.get()
+            new_description = description_entry.get()
+            delete(og_passyword, og_description)
+            store(new_passyword, new_description)
+            dump_desc()
+            update_prompt.destroy()
+        if decision == 0:
+            update_prompt.destroy()
+    save_button, cancel_button = binary_buttons(update_frame, update_info_decision, "Save", "Cancel")
+    save_button.configure(state="disabled", fg_color="gray")
+
 first = first_time()
 
 app = customtkinter.CTk()
@@ -450,7 +487,7 @@ storage_content = customtkinter.CTkScrollableFrame(
     width=storage_frame_w - corner_spacing,
     height=storage_frame_h,
     corner_radius=5,
-    fg_color="transparent"
+    fg_color="#2b2b2b"
 )
 storage_content.pack(fill="both", expand=True)
 
@@ -467,8 +504,10 @@ def dump_desc():
         try:
             desc_label = customtkinter.CTkLabel(storage_content, text=data[i]["desc"])
             desc_label.grid(row=i, column=0, sticky="w", padx=side_spacing, pady=upper_spacing)
-            show_button = customtkinter.CTkButton(storage_content, text="Show Password", command=lambda d=data[i]["desc"]: fetch_requested(d))
-            show_button.grid(row=i, column=1, sticky="e", padx=side_spacing, pady=upper_spacing)
+            update_button = customtkinter.CTkButton(storage_content, text="Update", command=lambda d=data[i]["desc"]: update_info(d), fg_color="#2b2b2b", width=0)
+            update_button.grid(row=i, column=1, sticky="e")
+            show_button = customtkinter.CTkButton(storage_content, text="Show Password", command=lambda d=data[i]["desc"]: fetch_requested(d), fg_color="#2b2b2b", width=0)
+            show_button.grid(row=i, column=2, sticky="e")
         except KeyError:        # I realized that this would happen if the user enters the app without any passwords stored.
             return
 
