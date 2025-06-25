@@ -3,10 +3,12 @@ from math import floor
 import pygetwindow
 import time
 import pyotp, qrcode
-import customtkinter, tkinter
+import customtkinter as ctk
+import tkinter
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image
+
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
 
@@ -92,15 +94,15 @@ def setup2FA(yb, nb, app) -> None:
     nb.pack_forget()
     twoFA_key = setup_qr_code_image()
     qr_code = open_image()
-    qr_code_image = customtkinter.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
-    cur_prompt = customtkinter.CTkToplevel()
+    qr_code_image = ctk.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
+    cur_prompt = ctk.CTkToplevel()
     cur_prompt.title("Setup 2FA")
     cur_prompt.geometry("700x790")
-    cur_frame = customtkinter.CTkFrame(cur_prompt)
+    cur_frame = ctk.CTkFrame(cur_prompt)
     cur_frame.pack(padx=20, pady=20, expand=True)
-    cur_label = customtkinter.CTkLabel(cur_frame, image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", compound="top")
+    cur_label = ctk.CTkLabel(cur_frame, image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", compound="top")
     cur_label.pack(padx=20, pady=20)
-    twoFA_entry = customtkinter.CTkEntry(cur_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
+    twoFA_entry = ctk.CTkEntry(cur_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
     twoFA_entry.pack(padx=20,pady=0)
     def submit_2FA():
         code_2FA = twoFA_entry.get()
@@ -122,7 +124,7 @@ def setup2FA(yb, nb, app) -> None:
         else:
             cur_label.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect Code", compound="top")
             twoFA_entry.delete(0, "end")
-    submit_2FA_b = customtkinter.CTkButton(cur_frame, text="Submit", command=submit_2FA)
+    submit_2FA_b = ctk.CTkButton(cur_frame, text="Submit", command=submit_2FA)
     submit_2FA_b.pack(padx=20, pady=10)
     cur_label.image = qr_code_image
 
@@ -143,10 +145,31 @@ def check_base() -> str:
     exit_helper()
     return base
 
+# Password-generating function that includes all letters a-Z, numbers 0-9, and non conflicting symbols "!@#$%^&*()-_=+[]{};:,.?/"
+def generate_passyword(selection: list) -> str:
+    return
+
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
     base = check_base()
     enter_helper()
+    try:
+        with open("manager.json", "r") as file:
+            data = json.load(file)
+        desc_section = data[0]["data"]
+        desc_counter = 0
+        for description in desc_section:
+            existing_descs = {d["desc"] for d in desc_section}
+            if desc not in existing_descs:
+                final_desc = desc
+            else:
+                i = 1
+                while f"{desc} ({i})" in existing_descs:
+                    i += 1
+                final_desc = f"{desc} ({i})"
+            desc = final_desc
+    except FileNotFoundError:
+        pass
     if base == "z":
         yes = PM_Z(word, desc)
     elif base == "y":
@@ -414,17 +437,17 @@ def present() -> bool:
 
 # Used for the main window instead of sub windows
 def big_yes_no_buttons(framework, conf_type):
-    yes_button = customtkinter.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
+    yes_button = ctk.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
     yes_button.place(relx=0.35, rely=0.6, anchor=tkinter.CENTER)
-    no_button = customtkinter.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
+    no_button = ctk.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
     no_button.place(relx=0.65, rely=0.6, anchor=tkinter.CENTER)
     return yes_button, no_button
 
 # Used for subwindows that provide the user with two options to choose from
 def binary_buttons(framework, conf_type, b1, b2):
-    yes_button = customtkinter.CTkButton(master=framework, text=b1, command=lambda decision=1: conf_type(decision))
+    yes_button = ctk.CTkButton(master=framework, text=b1, command=lambda decision=1: conf_type(decision))
     yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
-    no_button = customtkinter.CTkButton(master=framework, text=b2, command=lambda decision=0: conf_type(decision))
+    no_button = ctk.CTkButton(master=framework, text=b2, command=lambda decision=0: conf_type(decision))
     no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
     return yes_button, no_button
 
