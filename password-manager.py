@@ -1,8 +1,9 @@
 from handle import *
+current_timer = None
 
 # Prompts the user if they are sure with their decision of storing their password
 def confirm_storage():
-    word = user_pass.get()
+    word = entry_pass.get()
     desc = entry_description.get()
     if desc == '':
         entry_input.set("Password descriptions cannot be empty!")
@@ -15,62 +16,34 @@ def confirm_storage():
             rm_message(entry_input)
         if decision == 1:
             store(word, desc)
+            dump_desc()
             entry_input.set("Password has been stored!")    
-            user_pass.delete(0, 'end')
+            entry_pass.delete(0, 'end')
             entry_description.delete(0, 'end')
             app.after(4000, lambda: rm_message(entry_input))
         yes_button.place_forget()
         no_button.place_forget()
         store_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
-        dump_desc()
     yes_button, no_button = big_yes_no_buttons(entry_frame, handle_storage)
-
-# Prompts the user if they are sure with their decision of deleting their password
-def confirm_deletion():
-    word = deletion_pass.get()
-    desc = deletion_description.get()
-    if desc == '':
-        deletion_input.set("Password descriptions cannot be empty!")
-        app.after(4000, lambda: rm_message(deletion_input))
-        return
-    deletion_button.place_forget()
-    deletion_input.set("Are you sure you want to delete this password?")
-    def handle_deletion(decision: int):      # Handles password deletion
-        if decision == 0:
-            rm_message(deletion_input)
-        if decision == 1:
-            result = delete(word, desc)
-            if result == 2:
-                deletion_input.set("Password has been successfully deleted")
-                deletion_pass.delete(0, 'end')
-                deletion_description.delete(0, 'end')
-                dump_desc()
-                app.after(4000, lambda: rm_message(deletion_input))
-            else:
-                deletion_input.set("The password or description entered is incorrect")
-        yes_button.place_forget()
-        no_button.place_forget()
-        deletion_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
-    yes_button, no_button = big_yes_no_buttons(deletion_frame, handle_deletion)
 
 # Fetch the user's requested password in the output textbox and make it disappear after 10 seconds. Also refreshes 10 second timer
 def fetch_requested(d: str):
     global current_timer
-    show_output.configure(state="normal")
+    vault_output.configure(state="normal")
     output = fetch(d)
     if not output == '':
-        show_output.delete("0.0", "end")
-        show_output.insert("0.0", output)
-        show_output.configure(state="disable")
+        vault_output.delete("0.0", "end")
+        vault_output.insert("0.0", output)
+        vault_output.configure(state="disable")
         if 'current_timer' in globals() and current_timer is not None:
-            show_output.after_cancel(current_timer)
+            vault_output.after_cancel(current_timer)
         def clear_output():
-            show_output.configure(state="normal")
-            show_output.delete("0.0", "end")
-            show_output.configure(state="disabled")
+            vault_output.configure(state="normal")
+            vault_output.delete("0.0", "end")
+            vault_output.configure(state="disabled")
             global current_timer
             current_timer = None
-        current_timer = show_output.after(10000, clear_output)
+        current_timer = vault_output.after(10000, clear_output)
 
 def rm_message(message_input):
     message_input.set("")
@@ -78,18 +51,18 @@ def rm_message(message_input):
 # Used to set the master password for teh user the first time. Also, gives the user an option to enable 2FA.
 def set_main():
     twoFA_already = is2FAsetup()
-    prompt = customtkinter.CTkToplevel()
+    prompt = ctk.CTkToplevel()
     prompt.title("Setup")
     prompt.geometry("720x480")
-    set_m_frame = customtkinter.CTkFrame(prompt)
+    set_m_frame = ctk.CTkFrame(prompt)
     set_m_frame.pack(padx=20, pady=20, expand=True)
-    question = customtkinter.CTkLabel(set_m_frame, text=("Before you get started, you need to set up a master password"
+    question = ctk.CTkLabel(set_m_frame, text=("Before you get started, you need to set up a master password"
                                                     " to access all of the passwords you will be storing."
                                                     " Make sure that it's at least 20+ characters long!"
                                                     "\n (Note: It can be changed later.)" )
                                             , wraplength=360)
     question.pack(padx=20, pady=20)
-    answer = customtkinter.CTkEntry(set_m_frame, width=200)
+    answer = ctk.CTkEntry(set_m_frame, width=200)
     answer.pack(padx=20, pady=10)
     def submit():
         password = answer.get()
@@ -117,29 +90,29 @@ def set_main():
                     finished = setup2FA(yes_button, no_button, app)
                     update_2FA_status("Enable 2FA")
             yes_button, no_button = binary_buttons(set_m_frame, twoFA_decision, "Yes", "No")
-    submit_b = customtkinter.CTkButton(set_m_frame, text="Submit", command=submit)
+    submit_b = ctk.CTkButton(set_m_frame, text="Submit", command=submit)
     submit_b.pack(pady=20)
     prompt.grab_set()
 
 #Of course, the classic master password check to make sure that no one besides the user can get access to the application. Or use 2FA if the user enabled it
 def main_login() -> None:
     attempt = 0
-    prompt = customtkinter.CTkToplevel()
+    prompt = ctk.CTkToplevel()
     prompt.title("Login")
     prompt.geometry("720x480")
     def master_login_logic(twoFA_enabled: bool):
         for child in prompt.winfo_children():
             child.destroy()
-        frame = customtkinter.CTkFrame(prompt)
+        frame = ctk.CTkFrame(prompt)
         frame.pack(padx=20, pady=20, expand=True)
         if not twoFA_enabled:
-            check = customtkinter.CTkLabel(frame, text="2FA must be enabled to login via this method")
+            check = ctk.CTkLabel(frame, text="2FA must be enabled to login via this method")
             check.pack(padx=20, pady=20)
             prompt.after(4000, lambda: check.configure(text="Please enter your master password"))
         else:
-            check = customtkinter.CTkLabel(frame, text="Please enter your master password", wraplength=360)
+            check = ctk.CTkLabel(frame, text="Please enter your master password", wraplength=360)
         check.pack(padx=20, pady=20)
-        password_entry = customtkinter.CTkEntry(frame, placeholder_text="Enter password here", width=200)
+        password_entry = ctk.CTkEntry(frame, placeholder_text="Enter password here", width=200)
         password_entry.pack(padx=20, pady=20)
         def master_login():
             given_password = password_entry.get()
@@ -155,22 +128,22 @@ def main_login() -> None:
                 if attempt == 5:
                     sys.exit()
                 check.configure(text=f"Password is incorrect, you have {5-attempt} attempts left.", wraplength=360)
-        check_password = customtkinter.CTkButton(frame, text="Login", command=master_login)
+        check_password = ctk.CTkButton(frame, text="Login", command=master_login)
         check_password.pack(pady=10)
-        use_2FA = customtkinter.CTkButton(frame, text="Login via 2FA", command=login_2FA_logic)
+        use_2FA = ctk.CTkButton(frame, text="Login via 2FA", command=login_2FA_logic)
         use_2FA.pack(pady=10)
     def login_2FA_logic():
         for child in prompt.winfo_children():
             child.destroy()
         is2FA = is2FAsetup()
-        frame_2FA = customtkinter.CTkFrame(prompt)
+        frame_2FA = ctk.CTkFrame(prompt)
         frame_2FA.pack(padx=20, pady=20, expand=True)
         if not is2FA:
             master_login_logic(False)
             return
-        check_twoFA = customtkinter.CTkLabel(frame_2FA, text="Enter the 2FA code found in your authenticator to login", wraplength=360)
+        check_twoFA = ctk.CTkLabel(frame_2FA, text="Enter the 2FA code found in your authenticator to login", wraplength=360)
         check_twoFA.pack(padx=20, pady=20)
-        twoFA_entry = customtkinter.CTkEntry(frame_2FA, placeholder_text="Enter 2FA code here", width=200)
+        twoFA_entry = ctk.CTkEntry(frame_2FA, placeholder_text="Enter 2FA code here", width=200)
         twoFA_entry.pack(padx=20, pady=20)
         def authenticate_2FA():
             successful = check_2FA(twoFA_entry.get())
@@ -181,21 +154,21 @@ def main_login() -> None:
                 check_twoFA.configure(text="Incorrect Code")
                 prompt.after(4000, lambda: check_twoFA.configure(text="Enter the 2FA code found in your authenticator to login"))
                 twoFA_entry.delete(0, "end")
-        check_code = customtkinter.CTkButton(frame_2FA, text="Login", command=authenticate_2FA)
+        check_code = ctk.CTkButton(frame_2FA, text="Login", command=authenticate_2FA)
         check_code.pack(pady=10)
-        use_master = customtkinter.CTkButton(frame_2FA, text="Login via master password", command=lambda: master_login_logic(True))
+        use_master = ctk.CTkButton(frame_2FA, text="Login via master password", command=lambda: master_login_logic(True))
         use_master.pack(pady=10)
     master_login_logic(True)
     prompt.grab_set()
 
 # Asks the user if they are sure with exporting their passwords.
 def confirm_export() -> None:
-    export_prompt = customtkinter.CTkToplevel()
+    export_prompt = ctk.CTkToplevel()
     export_prompt.title("Export")
     export_prompt.geometry("720x480")
-    export_frame = customtkinter.CTkFrame(export_prompt)
+    export_frame = ctk.CTkFrame(export_prompt)
     export_frame.pack(padx=20, pady=20, expand=True)
-    export_label = customtkinter.CTkLabel(export_frame, text=("Are you sure you want to export all your stored passwords?"
+    export_label = ctk.CTkLabel(export_frame, text=("Are you sure you want to export all your stored passwords?"
                                                              "\n(Warning: It's recommended to keep the file in a safe location)"), wraplength=360)
     export_label.pack(padx=20, pady=20)
     def export_decision(decision: int) -> None:      # Gives the user the option to export their passwords.
@@ -208,7 +181,7 @@ def confirm_export() -> None:
                 export_prompt.destroy()
             else:
                 export_label.configure(text=message)
-                ok_button = customtkinter.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
+                ok_button = ctk.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
                 ok_button.pack(padx=20, pady=20)
         yes_button.pack_forget()
         no_button.pack_forget()
@@ -217,12 +190,12 @@ def confirm_export() -> None:
 
 # Gives the user the option to import their passwords from a previously exported file.
 def confirm_import() -> None:
-    import_prompt = customtkinter.CTkToplevel()
+    import_prompt = ctk.CTkToplevel()
     import_prompt.title("Import")
     import_prompt.geometry("720x480")
-    import_frame = customtkinter.CTkFrame(import_prompt)
+    import_frame = ctk.CTkFrame(import_prompt)
     import_frame.pack(padx=20, pady=20, expand=True)
-    import_label = customtkinter.CTkLabel(import_frame, text=("Are you sure you want to import passwords from a previously exported file?"), wraplength=360)
+    import_label = ctk.CTkLabel(import_frame, text=("Are you sure you want to import passwords from a previously exported file?"), wraplength=360)
     import_label.pack(padx=20, pady=20)
     def import_decision(decision: int) -> None:
         if decision == 0:
@@ -257,12 +230,12 @@ def confirm_import() -> None:
     import_prompt.grab_set()
 
 def confirm_reset() -> None:
-    reset_master_prompt = customtkinter.CTkToplevel()
+    reset_master_prompt = ctk.CTkToplevel()
     reset_master_prompt.title("Reset Master Password")
     reset_master_prompt.geometry("720x480")
-    reset_master_frame = customtkinter.CTkFrame(reset_master_prompt)
+    reset_master_frame = ctk.CTkFrame(reset_master_prompt)
     reset_master_frame.pack(padx=20, pady=20, expand=True)
-    reset_master_label = customtkinter.CTkLabel(reset_master_frame, text=("Are you sure you want to reset your master password?"
+    reset_master_label = ctk.CTkLabel(reset_master_frame, text=("Are you sure you want to reset your master password?"
                                                                         " (Note: 2FA must be enabled to reset your master password)"), wraplength=360)
     reset_master_label.pack(padx=20, pady=20)
     def reset_master_decision(decision: int) -> None:
@@ -281,9 +254,9 @@ def confirm_reset() -> None:
                 for child in reset_master_frame.winfo_children():
                     child.destroy()
                 reset_master_prompt.geometry("720x480")
-                reset_label = customtkinter.CTkLabel(reset_master_frame, text="Check your authenticator to enter your 2FA code")
+                reset_label = ctk.CTkLabel(reset_master_frame, text="Check your authenticator to enter your 2FA code")
                 reset_label.pack(padx=20, pady=20)
-                twoFA_entry = customtkinter.CTkEntry(master=reset_master_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
+                twoFA_entry = ctk.CTkEntry(master=reset_master_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
                 twoFA_entry.pack(padx=20, pady=20)
                 def submit_2FA():
                     code_2FA = twoFA_entry.get()
@@ -294,19 +267,19 @@ def confirm_reset() -> None:
                     else:
                         reset_label.configure(text="Incorrect Code")
                         twoFA_entry.delete(0, "end")
-                submit_2FA_b = customtkinter.CTkButton(reset_master_frame, text="Submit", command=submit_2FA)
+                submit_2FA_b = ctk.CTkButton(reset_master_frame, text="Submit", command=submit_2FA)
                 submit_2FA_b.pack(padx=20, pady=10)
     yes_button, no_button = binary_buttons(reset_master_frame, reset_master_decision, "Yes", "No")
     reset_master_prompt.grab_set()
     
 # Gives the user the option to (begrudgingly) disable 2FA 
 def confirm_disable_2FA() -> None:
-    disable_2FA_prompt = customtkinter.CTkToplevel()
+    disable_2FA_prompt = ctk.CTkToplevel()
     disable_2FA_prompt.title("Disable 2FA")
     disable_2FA_prompt.geometry("720x480")
-    disable_2FA_frame = customtkinter.CTkFrame(disable_2FA_prompt)
+    disable_2FA_frame = ctk.CTkFrame(disable_2FA_prompt)
     disable_2FA_frame.pack(padx=20, pady=20, expand=True)
-    disable_2FA_label = customtkinter.CTkLabel(disable_2FA_frame, text="Are you sure you want to disable 2FA? (Not Recommended)", wraplength=360)
+    disable_2FA_label = ctk.CTkLabel(disable_2FA_frame, text="Are you sure you want to disable 2FA? (Not Recommended)", wraplength=360)
     disable_2FA_label.pack(padx=20, pady=20)
     def disable_2FA_decision(decision: int):
         if decision == 0:
@@ -318,9 +291,9 @@ def confirm_disable_2FA() -> None:
             for child in disable_2FA_frame.winfo_children():
                 child.destroy()
             disable_2FA_prompt.geometry("720x480")
-            disable_success_label = customtkinter.CTkLabel(disable_2FA_frame, text="2FA has been successfully disabled", wraplength=360)
+            disable_success_label = ctk.CTkLabel(disable_2FA_frame, text="2FA has been successfully disabled", wraplength=360)
             disable_success_label.pack(padx=20, pady=20)
-            ok_button = customtkinter.CTkButton(disable_2FA_frame, text="Ok", command= lambda: disable_2FA_prompt.destroy())
+            ok_button = ctk.CTkButton(disable_2FA_frame, text="Ok", command= lambda: disable_2FA_prompt.destroy())
             ok_button.pack(padx=20, pady=20)
             update_2FA_status("Disable 2FA")
         yes_button.pack_forget()
@@ -330,12 +303,12 @@ def confirm_disable_2FA() -> None:
 
 # Gives the user the option to enable 2FA if they didn't during the setup
 def confirm_enable_2FA() -> None:
-    enable_2FA_prompt = customtkinter.CTkToplevel()
+    enable_2FA_prompt = ctk.CTkToplevel()
     enable_2FA_prompt.title("Enable 2FA")
     enable_2FA_prompt.geometry("720x480")
-    enable_2FA_frame = customtkinter.CTkFrame(enable_2FA_prompt)
+    enable_2FA_frame = ctk.CTkFrame(enable_2FA_prompt)
     enable_2FA_frame.pack(padx=20, pady=20, expand=True)
-    enable_2FA_label = customtkinter.CTkLabel(enable_2FA_frame, text="Are you sure you want to enable 2FA? (Recommended)", wraplength=360)
+    enable_2FA_label = ctk.CTkLabel(enable_2FA_frame, text="Are you sure you want to enable 2FA? (Recommended)", wraplength=360)
     enable_2FA_label.pack(padx=20, pady=20)
     def enable_2FA_decision(decision: int):
         if decision == 0:
@@ -361,24 +334,24 @@ def desc_search(event):
         try:
             current_desc = data[i]["desc"]
             if search_desc in current_desc:
-                desc_label = customtkinter.CTkLabel(storage_content, text=current_desc)
+                desc_label = ctk.CTkLabel(storage_content, text=current_desc)
                 desc_label.grid(row=i, column=0, sticky="w", padx=side_spacing, pady=upper_spacing)
-                show_button = customtkinter.CTkButton(storage_content, text="Show Password", command=lambda d=current_desc: fetch_requested(d))
+                show_button = ctk.CTkButton(storage_content, text="Show Password", command=lambda d=current_desc: fetch_requested(d))
                 show_button.grid(row=i, column=1, sticky="e", padx=side_spacing, pady=upper_spacing)
         except KeyError:        # I realized that this would happen if the user enters the app without any passwords stored.
             return
 
 # Give the user the option to update their password itself, the description, or both.
 def update_info(description: str) -> None:
-    update_prompt = customtkinter.CTkToplevel()
+    update_prompt = ctk.CTkToplevel()
     update_prompt.title("Update password information")
     update_prompt.geometry("720x480")
-    update_frame = customtkinter.CTkFrame(update_prompt)
+    update_frame = ctk.CTkFrame(update_prompt)
     update_frame.pack(padx=20, pady=20, expand=True)
     og_passyword = fetch(description)
     og_description = description
-    passyword_sv = customtkinter.StringVar(value=og_passyword)
-    description_sv = customtkinter.StringVar(value=og_description)
+    passyword_sv = ctk.StringVar(value=og_passyword)
+    description_sv = ctk.StringVar(value=og_description)
     def entry_change(*args):
         if len(passyword_entry.get()) == 0 or len(description_entry.get()) == 0:
             save_button.configure(state="disabled", fg_color="gray")
@@ -388,9 +361,9 @@ def update_info(description: str) -> None:
             save_button.configure(state="disabled", fg_color="gray")
     passyword_sv.trace_add("write", entry_change)
     description_sv.trace_add("write", entry_change)
-    passyword_entry = customtkinter.CTkEntry(update_frame, width=200, height=35, textvariable=passyword_sv)
+    passyword_entry = ctk.CTkEntry(update_frame, width=200, height=35, textvariable=passyword_sv)
     passyword_entry.pack(padx=20, pady=20)
-    description_entry = customtkinter.CTkEntry(update_frame, width=200, height=35, textvariable=description_sv)
+    description_entry = ctk.CTkEntry(update_frame, width=200, height=35, textvariable=description_sv)
     description_entry.pack(padx=20, pady=20)
     def update_info_decision(decision: int) -> None:
         if decision == 1:
@@ -404,10 +377,36 @@ def update_info(description: str) -> None:
             update_prompt.destroy()
     save_button, cancel_button = binary_buttons(update_frame, update_info_decision, "Save", "Cancel")
     save_button.configure(state="disabled", fg_color="gray")
+    update_prompt.grab_set()
+
+def clear_out():
+    vault_output.configure(state="normal")
+    vault_output.delete("0.0", "end")
+    vault_output.configure(state="disabled")
+
+def delete_info(word: str, desc: str) -> None:
+    confirm_delete = f"Are you sure you want to delete {desc}?"
+    global current_timer
+    if current_timer is not None:
+        app.after_cancel(current_timer)
+        current_timer = None
+    if vault_output.get("1.0", "end-1c") == confirm_delete:
+        delete(word, desc)
+        dump_desc()
+        vault_output.configure(state="normal")
+        vault_output.delete("0.0", "end")
+        vault_output.insert("0.0", f"{desc} has been successfully deleted")
+        vault_output.configure(state="disabled")
+    else:
+        vault_output.configure(state="normal")
+        vault_output.delete("0.0", "end")
+        vault_output.insert("0.0", confirm_delete)
+        vault_output.configure(state="disabled")
+    current_timer = app.after(5000, clear_out)
 
 first = first_time()
 
-app = customtkinter.CTk()
+app = ctk.CTk()
 if first:
     app.withdraw()
     set_main()
@@ -424,68 +423,114 @@ app.title("password-manager")
 # The frame that contains the area to store passwords
 entry_frame_w = floor(screen_w * 0.3)
 entry_frame_h = floor(screen_h * 0.37)
-entry_frame = customtkinter.CTkFrame(master=app, width=entry_frame_w, height=entry_frame_h, corner_radius=5)
 corner_spacing = floor(screen_w * 0.01302)
+
+entry_frame = ctk.CTkFrame(master=app, width=entry_frame_w, height=entry_frame_h, corner_radius=5)
 entry_frame.place(x=corner_spacing, y=corner_spacing)
 
+entry_label = ctk.CTkLabel(master=entry_frame, text="Store Passwords", font=("Arial", 15))
+entry_label.place(relx=0.5, rely=0.01, anchor=tkinter.N)
 entry_input = StringVar()
 
-# Entry Frame's password entry
-user_pass = customtkinter.CTkEntry(master=entry_frame, placeholder_text="Password", width=200, height=35, border_width=2, corner_radius=10)
-user_pass.place(relx=0.5, rely=0.2, anchor=tkinter.CENTER)
+entry_pass = ctk.CTkEntry(master=entry_frame, placeholder_text="Password", width=200, height=35, border_width=2, corner_radius=10)
+entry_pass.place(relx=0.5, rely=0.2, anchor=tkinter.CENTER)
 
-# Entry Frame's description entry
-entry_description = customtkinter.CTkEntry(master=entry_frame, placeholder_text="Description", width=200, height=35, border_width=2, corner_radius=10)
+entry_description = ctk.CTkEntry(master=entry_frame, placeholder_text="Description", width=200, height=35, border_width=2, corner_radius=10)
 entry_description.place(relx=0.5, rely=0.4, anchor=tkinter.CENTER)
 
-# Entry Frame's storage button
-store_button = customtkinter.CTkButton(master=entry_frame, text="Store", command=confirm_storage)
+store_button = ctk.CTkButton(master=entry_frame, text="Store", command=confirm_storage)
 store_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
-
-# Entry Frame's storage message
-store_message = customtkinter.CTkLabel(master=entry_frame, textvariable = entry_input, width=120, height=25, corner_radius=8)    
+store_message = ctk.CTkLabel(master=entry_frame, textvariable = entry_input, width=120, height=25, corner_radius=8)    
 store_message.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
 
-# The frame that contains the area to store passwords
-deletion_frame_w = entry_frame_w
-deletion_frame_h = entry_frame_h
-deletion_frame = customtkinter.CTkFrame(master=app, width=deletion_frame_w, height=deletion_frame_h, corner_radius=5)
-deletion_frame.place(x=corner_spacing, y=deletion_frame_h + (7.2 * corner_spacing))
+PLACEHOLDERS = {"Password Length", "# of Letters", "# of Numbers", "# of Symbols"}
 
-deletion_input = StringVar()
+# Used to make sure a CTkEntry only accepts numbers
+def only_numbers(P) -> bool:
+    if P == "" or P in PLACEHOLDERS:
+        return True
+    return P.isdigit()
 
-deletion_message = customtkinter.CTkLabel(master=deletion_frame, textvariable = deletion_input, width=120, height=25, corner_radius=8)
-deletion_message.place(relx=0.5, rely=0.75, anchor=tkinter.CENTER)
+def apply_validation():
+    generate_pass_length.configure(validate="key", validatecommand=(only_nums, "%P"))
+    generate_letters_entry.configure(validate="key", validatecommand=(only_nums, "%P"))
+    generate_numbers_entry.configure(validate="key", validatecommand=(only_nums, "%P"))
+    generate_symbols_entry.configure(validate="key", validatecommand=(only_nums, "%P"))
 
-deletion_pass = customtkinter.CTkEntry(master=deletion_frame, placeholder_text="Password to delete", width=200, height=35, border_width=2, corner_radius=10)
-deletion_pass.place(relx=0.5, rely=0.2, anchor=tkinter.CENTER)
+# Enables/Disables CTkEntry whenever the checkbox is checked/unchecked
+def e_d_entries(checkbox, entry, pc) -> None:
+    if checkbox.get() == 1:
+        entry.configure(state="normal")
+        entry.configure(validate="key", validatecommand=(only_nums, "%P"))
+        if entry.get() == "" or pc in entry.get():
+            entry.delete(0, "end")
+            entry.focus()
+    else:
+        entry.configure(state="normal")
+        if entry.get() != "":
+            entry.delete(0, "end")
+        entry.configure(placeholder_text=pc)
+        entry.configure(state="disabled")
 
-deletion_description = customtkinter.CTkEntry(master=deletion_frame, placeholder_text="Description", width=200, height=35, border_width=2, corner_radius=10)
-deletion_description.place(relx=0.5, rely=0.4, anchor=tkinter.CENTER)
+# The frame that contains the area to generate passwords.
+generate_frame_w = entry_frame_w
+generate_frame_h = entry_frame_h
+generate_frame = ctk.CTkFrame(master=app, width=generate_frame_w, height=(generate_frame_h * 1.05), corner_radius=5)
+generate_frame.place(x=corner_spacing, y=generate_frame_h + (2 * corner_spacing))
+generate_label = ctk.CTkLabel(master=generate_frame, text="Password Generator", font=("Arial", 15))
+generate_label.place(relx=0.5, rely=0.01, anchor=tkinter.N)
+only_nums = app.register(only_numbers)
+generate_pass_length = ctk.CTkEntry(master=generate_frame, placeholder_text="Password Length")
+generate_pass_length.place(relx=0.5, rely=0.16, anchor=tkinter.N)
 
-deletion_button = customtkinter.CTkButton(master=deletion_frame, text="Delete", command=confirm_deletion)
-deletion_button.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
+cb_generate_let_var = ctk.IntVar()
+generate_letters_entry = ctk.CTkEntry(master=generate_frame, placeholder_text="# of Letters")
+generate_letters_entry.place(relx=0.3, rely=0.35, anchor=tkinter.W)
+generate_cb_letters = ctk.CTkCheckBox(master=generate_frame, text="", variable=cb_generate_let_var, command=lambda: e_d_entries(cb_generate_let_var, generate_letters_entry, "# of Letters"), width=0)
+generate_cb_letters.place(relx=0.2, rely=0.35, anchor=tkinter.W)
+
+cb_generate_num_var = ctk.IntVar()
+generate_numbers_entry = ctk.CTkEntry(master=generate_frame, placeholder_text="# of Numbers")
+generate_numbers_entry.place(relx=0.3, rely=0.5, anchor=tkinter.W)
+generate_cb_numbers = ctk.CTkCheckBox(master=generate_frame, text="", variable=cb_generate_num_var, command=lambda: e_d_entries(cb_generate_num_var, generate_numbers_entry, "# of Numbers"), width=0)
+generate_cb_numbers.place(relx=0.2, rely=0.5, anchor=tkinter.W)
+
+cb_generate_sym_var = ctk.IntVar()
+generate_symbols_entry = ctk.CTkEntry(master=generate_frame, placeholder_text="# of Symbols")
+generate_symbols_entry.place(relx=0.3, rely=0.65, anchor=tkinter.W)
+generate_cb_symbols = ctk.CTkCheckBox(master=generate_frame, text="", variable=cb_generate_sym_var, command=lambda: e_d_entries(cb_generate_sym_var, generate_symbols_entry, "# of Symbols"), width=0)
+generate_cb_symbols.place(relx=0.2, rely=0.65, anchor=tkinter.W)
+
+generate_output = ctk.CTkTextbox(master=app, width=generate_frame_w, height=floor((screen_h - generate_frame_h) * 0.13))
+generate_output.configure(state="disabled")
+generate_output.place(x=corner_spacing, y=(screen_h * 0.82))
+
+e_d_entries(cb_generate_let_var, generate_letters_entry, "# of Letters")
+e_d_entries(cb_generate_num_var, generate_numbers_entry, "# of Numbers")
+e_d_entries(cb_generate_sym_var, generate_symbols_entry, "# of Symbols")
+
+apply_validation()
 
 # The frame that contains the area that displays password descriptions and their show buttons
-storage_frame_w = floor(screen_w * 0.4)
-storage_frame_h = floor(screen_h - (screen_h * 0.27))
-storage_frame = customtkinter.CTkFrame(master=app, width=storage_frame_w, height=storage_frame_h, corner_radius=5)
-storage_frame.place(x=(screen_w - storage_frame_w - corner_spacing), y=corner_spacing)
+vault_frame_w = floor(screen_w * 0.4)
+vault_frame_h = floor(screen_h - (screen_h * 0.27))
+vault_frame = ctk.CTkFrame(master=app, width=vault_frame_w, height=vault_frame_h, corner_radius=5)
+vault_frame.place(x=(screen_w - vault_frame_w - corner_spacing), y=corner_spacing)
 
 # Storage Frame's message output box
-show_output = customtkinter.CTkTextbox(master=app, width=(storage_frame_w), height=floor((screen_h - storage_frame_h) * 0.31))
-show_output.configure(state="disable")
-show_output.place(x=(screen_w - storage_frame_w - corner_spacing), y=(screen_h * 0.82))
+vault_output = ctk.CTkTextbox(master=app, width=vault_frame_w, height=floor((screen_h - vault_frame_h) * 0.31))
+vault_output.configure(state="disable")
+vault_output.place(x=(screen_w - vault_frame_w - corner_spacing), y=(screen_h * 0.82))
 
-search_bar = customtkinter.CTkEntry(master=storage_frame, width=(storage_frame_w * 0.97), placeholder_text="🔍 Search")
+search_bar = ctk.CTkEntry(master=vault_frame, width=(vault_frame_w * 0.97), placeholder_text="🔍 Search")
 search_bar.pack(padx=10, pady=10)
 search_bar.bind("<Return>", desc_search)
 
 # Storage Frame's scrollbar
-storage_content = customtkinter.CTkScrollableFrame(
-    master=storage_frame,
-    width=storage_frame_w - corner_spacing,
-    height=storage_frame_h,
+storage_content = ctk.CTkScrollableFrame(
+    master=vault_frame,
+    width=vault_frame_w - corner_spacing,
+    height=vault_frame_h,
     corner_radius=5,
     fg_color="#2b2b2b"
 )
@@ -496,18 +541,25 @@ upper_spacing = floor(screen_w * 0.009255)
 
 # Storage Frame's function to output all the descriptions of passwords and buttons to reveal a corresponding password that fades after 10 seconds
 def dump_desc():
+    cwd = os.path.join(os.getcwd(), "mini_icons")
+    pencil = Image.open(os.path.join(cwd, "pencil.png"))
+    recycle = Image.open(os.path.join(cwd, "recycle-bin.png"))
+    pencil_img = ctk.CTkImage(light_image=pencil, dark_image=pencil, size=(20, 20))
+    recycle_img = ctk.CTkImage(light_image=recycle, dark_image=recycle, size=(20, 20))
     data = access()
     for child in storage_content.winfo_children():
         child.destroy()
     storage_content.grid_columnconfigure(0, weight=1)
     for i in range(len(data)):
         try:
-            desc_label = customtkinter.CTkLabel(storage_content, text=data[i]["desc"])
+            desc_label = ctk.CTkLabel(storage_content, text=data[i]["desc"])
             desc_label.grid(row=i, column=0, sticky="w", padx=side_spacing, pady=upper_spacing)
-            update_button = customtkinter.CTkButton(storage_content, text="Update", command=lambda d=data[i]["desc"]: update_info(d), fg_color="#2b2b2b", width=0)
+            show_button = ctk.CTkButton(storage_content, text="Show Password", command=lambda d=data[i]["desc"]: fetch_requested(d), fg_color="#2b2b2b", width=0)
+            show_button.grid(row=i, column=0, sticky="e")
+            update_button = ctk.CTkButton(storage_content, text='', image=pencil_img, command=lambda d=data[i]["desc"]: update_info(d), fg_color="#2b2b2b", width=0)
             update_button.grid(row=i, column=1, sticky="e")
-            show_button = customtkinter.CTkButton(storage_content, text="Show Password", command=lambda d=data[i]["desc"]: fetch_requested(d), fg_color="#2b2b2b", width=0)
-            show_button.grid(row=i, column=2, sticky="e")
+            delete_button = ctk.CTkButton(storage_content, text='', image=recycle_img, command=lambda d=data[i]["desc"]: delete_info(fetch(d), d), fg_color="#2b2b2b", width=0)
+            delete_button.grid(row=i, column=2, sticky="e")
         except KeyError:        # I realized that this would happen if the user enters the app without any passwords stored.
             return
 
