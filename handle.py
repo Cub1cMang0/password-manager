@@ -8,10 +8,10 @@ import tkinter
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image
+import pyperclip
 
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
-
     enter_helper()
     image = Image.open("setup.png")
     exit_helper()
@@ -145,9 +145,93 @@ def check_base() -> str:
     exit_helper()
     return base
 
+# General function to check password strength and to steer the user into making stronger passwords.
+def check_strength(criteria: str, entry_widget, entry_label) -> None:
+    current_input = entry_widget.get()
+    if current_input == "Password Length":
+        entry_label.configure(text="")
+        return
+    if current_input != '' and current_input.isdigit():
+        length = int(current_input)
+        if criteria == "Password Length":
+            if length < 8:
+                entry_label.configure(text="Password is too short", text_color="red")
+            elif length >= 8 and length < 16:
+                entry_label.configure(text="Ok", text_color="yellow")
+            elif length > 15 and length < 65:
+                entry_label.configure(text="Strong", text_color="green")
+            elif length > 64:
+                entry_label.configure(text="Password is too long", text_color="red")
+            else:
+                entry_label.configure(text="")
+        else:
+            if length <= 2:
+                entry_label.configure(text="Weak", text_color="red")
+            elif length >=3 and length < 5:
+                entry_label.configure(text="Ok", text_color="yellow")
+            elif length >= 5:
+                entry_label.configure(text="Strong", text_color="green")
+            else:
+                entry_label.configure(text="")
+
 # Password-generating function that includes all letters a-Z, numbers 0-9, and non conflicting symbols "!@#$%^&*()-_=+[]{};:,.?/"
-def generate_passyword(selection: list) -> str:
-    return
+def generate_passyword(selection: list, length, letters, numbers, symbols) -> str:
+    passyword = ''
+    passy_length = int(length.get())
+    remaining = int(length.get())
+    selected = []
+    selection_length = 0
+    letters_length = ''
+    numbers_length = ''
+    symbols_length = ''
+    for i in range(len(selection)):
+        if i == 0:
+            if selection[0][1] != '':
+                letters_length = int(selection[0][1])
+                selection_length += letters_length
+            if selection[0][0] == 1:
+                selected.append("Letters")
+        elif i == 1:
+            if selection[1][1] != '':
+                numbers_length = int(selection[1][1])
+                selection_length += numbers_length
+            if selection[1][0]:
+                selected.append("Numbers")
+        elif i == 2:
+            if selection [2][1] != '':
+                symbols_length = int(selection[2][1])
+                selection_length += symbols_length
+            if selection[2][0] == 1:
+                selected.append("Symbols")
+    if passy_length < selection_length:
+        return f"Password length and requested characters don't match ({passy_length} vs {selection_length})" 
+    elif selection[0][0] == 0 and selection [1][0] == 0 and selection [2][0] == 0:
+        return "Password criteria hasn't been selected"
+    elif selection[0][1] == '' and selection [1][1] == '' and selection [2][1] == '' and selection[0][0] == 1 and selection [1][0] == 1 and selection [2][0] == 1:
+        passyword = ''.join(random.choice(string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]{};:,.?/") for _ in range(passy_length))
+        return passyword
+    else:
+        if letters_length != '':
+            passyword += ''.join(random.choice(string.ascii_letters) for _ in range(letters_length))
+            remaining -= letters_length
+        if numbers_length != '':
+            passyword += ''.join(random.choice(string.digits) for _ in range(numbers_length))
+            remaining -= numbers_length
+        if symbols_length != '':
+            passyword += ''.join(random.choice("!@#$%^&*()-_=+[]{};:,.?/") for _ in range(symbols_length))
+            remaining -= symbols_length
+    if remaining != 0:
+        while remaining != 0:
+            char_type = random.choice(selected)
+            random_amount = random.randint(1, remaining)
+            if char_type == "Letters":
+                passyword += ''.join(random.choice(string.ascii_letters) for _ in range(random_amount))
+            elif char_type == "Numbers":
+                passyword += ''.join(random.choice(string.digits) for _ in range(random_amount))
+            elif char_type == "Symbols":
+                passyword += ''.join(random.choice("!@#$%^&*()-_=+[]{};:,.?/") for _ in range(random_amount))
+            remaining -= random_amount
+    return passyword
 
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
@@ -157,7 +241,6 @@ def store(word: str, desc: str) -> None:
         with open("manager.json", "r") as file:
             data = json.load(file)
         desc_section = data[0]["data"]
-        desc_counter = 0
         for description in desc_section:
             existing_descs = {d["desc"] for d in desc_section}
             if desc not in existing_descs:
@@ -244,8 +327,8 @@ def master(passyword: str) -> None:
 def set_master(master_p: str) -> None:
     user_salt = bcrypt.gensalt()
     hashed_master = bcrypt.hashpw(master_p.encode(), user_salt)
-    user_salt = b64encode(user_salt).decode("utf-8")
-    hashed_master = b64encode(hashed_master).decode("utf-8")
+    user_salt = base64.b64encode(user_salt).decode("utf-8")
+    hashed_master = base64.b64encode(hashed_master).decode("utf-8")
     info = {
         "salt" : user_salt,
         "hash" : hashed_master
@@ -400,7 +483,6 @@ def export_info_enc() -> str:
     else:
         message = "The file does not exist (Try storing some passwords)"
         return message
-    main_info = access()
     file_path = filedialog.asksaveasfilename(
         defaultextension=".json",
         filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
