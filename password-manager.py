@@ -1,5 +1,6 @@
 from handle import *
-current_timer = None
+vault_timer = None
+generate_timer = None
 
 # Prompts the user if they are sure with their decision of storing their password
 def confirm_storage():
@@ -28,22 +29,22 @@ def confirm_storage():
 
 # Fetch the user's requested password in the output textbox and make it disappear after 10 seconds. Also refreshes 10 second timer
 def fetch_requested(d: str):
-    global current_timer
+    global vault_timer
     vault_output.configure(state="normal")
     output = fetch(d)
     if not output == '':
         vault_output.delete("0.0", "end")
         vault_output.insert("0.0", output)
-        vault_output.configure(state="disable")
-        if 'current_timer' in globals() and current_timer is not None:
-            vault_output.after_cancel(current_timer)
+        vault_output.configure(state="disabled")
+        if 'vault_timer' in globals() and vault_timer is not None:
+            vault_output.after_cancel(vault_timer)
         def clear_output():
             vault_output.configure(state="normal")
             vault_output.delete("0.0", "end")
             vault_output.configure(state="disabled")
-            global current_timer
-            current_timer = None
-        current_timer = vault_output.after(10000, clear_output)
+            global vault_timer
+            vault_timer = None
+        vault_timer = vault_output.after(10000, clear_output)
 
 def rm_message(message_input):
     message_input.set("")
@@ -69,8 +70,8 @@ def set_main():
         if len(password) < 20:
             question.configure(text="Password is too short! Enter a master password 20+ characters long!", wraplength=360)
             return
-        elif len(password) > 50:
-            question.configure(text="Bro you are not Mr. President. Enter a master password less than 50+ characters long!", wraplength=360)
+        elif len(password) > 64:
+            question.configure(text="Bro you are not Mr. President. Enter a master password less than 65 characters long!", wraplength=360)
             return
         master(password)
         answer.pack_forget()
@@ -386,10 +387,10 @@ def clear_out():
 
 def delete_info(word: str, desc: str) -> None:
     confirm_delete = f"Are you sure you want to delete {desc}?"
-    global current_timer
-    if current_timer is not None:
-        app.after_cancel(current_timer)
-        current_timer = None
+    global vault_timer
+    if vault_timer is not None:
+        app.after_cancel(vault_timer)
+        vault_timer = None
     if vault_output.get("1.0", "end-1c") == confirm_delete:
         delete(word, desc)
         dump_desc()
@@ -402,7 +403,7 @@ def delete_info(word: str, desc: str) -> None:
         vault_output.delete("0.0", "end")
         vault_output.insert("0.0", confirm_delete)
         vault_output.configure(state="disabled")
-    current_timer = app.after(5000, clear_out)
+    vault_timer = app.after(5000, clear_out)
 
 first = first_time()
 
@@ -451,26 +452,40 @@ def only_numbers(P) -> bool:
         return True
     return P.isdigit()
 
-def apply_validation():
-    generate_pass_length.configure(validate="key", validatecommand=(only_nums, "%P"))
-    generate_letters_entry.configure(validate="key", validatecommand=(only_nums, "%P"))
-    generate_numbers_entry.configure(validate="key", validatecommand=(only_nums, "%P"))
-    generate_symbols_entry.configure(validate="key", validatecommand=(only_nums, "%P"))
-
 # Enables/Disables CTkEntry whenever the checkbox is checked/unchecked
 def e_d_entries(checkbox, entry, pc) -> None:
     if checkbox.get() == 1:
         entry.configure(state="normal")
         entry.configure(validate="key", validatecommand=(only_nums, "%P"))
-        if entry.get() == "" or pc in entry.get():
+        if entry.get() == pc:
             entry.delete(0, "end")
             entry.focus()
+        elif entry.get() == "":
+             entry.focus()
     else:
         entry.configure(state="normal")
         if entry.get() != "":
             entry.delete(0, "end")
         entry.configure(placeholder_text=pc)
         entry.configure(state="disabled")
+
+# Fetches the state of checkboxes to figure out what the user wants in their password.
+def fetch_cb_states() -> list:
+    checkbox_states = []
+    if generate_cb_letters.get() == 1:
+        checkbox_states.append((1, generate_letters_entry.get()))
+    else:
+        checkbox_states.append((0, generate_letters_entry.get()))
+    if generate_cb_numbers.get() == 1:
+        checkbox_states.append((1, generate_numbers_entry.get()))
+    else:
+        checkbox_states.append((0, generate_numbers_entry.get()))
+    if generate_cb_symbols.get() == 1:
+        checkbox_states.append((1, generate_symbols_entry.get()))
+    else:
+        checkbox_states.append((0, generate_symbols_entry.get()))
+    return checkbox_states
+
 
 # The frame that contains the area to generate passwords.
 generate_frame_w = entry_frame_w
@@ -480,26 +495,42 @@ generate_frame.place(x=corner_spacing, y=generate_frame_h + (2 * corner_spacing)
 generate_label = ctk.CTkLabel(master=generate_frame, text="Password Generator", font=("Arial", 15))
 generate_label.place(relx=0.5, rely=0.01, anchor=tkinter.N)
 only_nums = app.register(only_numbers)
-generate_pass_length = ctk.CTkEntry(master=generate_frame, placeholder_text="Password Length")
-generate_pass_length.place(relx=0.5, rely=0.16, anchor=tkinter.N)
 
+# Section that deals with password length
+generate_pass_strength = ctk.CTkLabel(master=generate_frame, text="")
+generate_pass_strength.place(relx=0.5, rely=0.26, anchor=tkinter.N)
+generate_pass_length = ctk.CTkEntry(master=generate_frame, placeholder_text="Password Length", validate="key", validatecommand=(only_nums, "%P"))
+generate_pass_length.place(relx=0.5, rely=0.16, anchor=tkinter.N)
+generate_pass_length.bind("<KeyRelease>", lambda event: check_strength("Password Length", generate_pass_length, generate_pass_strength))
+
+# Section that deals with # of letters in the password to generate
 cb_generate_let_var = ctk.IntVar()
 generate_letters_entry = ctk.CTkEntry(master=generate_frame, placeholder_text="# of Letters")
-generate_letters_entry.place(relx=0.3, rely=0.35, anchor=tkinter.W)
+generate_letters_entry.place(relx=0.3, rely=0.45, anchor=tkinter.W)
+letters_entry_strength = ctk.CTkLabel(master=generate_frame, text="")
+letters_entry_strength.place(relx=0.6, rely=0.45, anchor=tkinter.W)
+generate_letters_entry.bind("<KeyRelease>", lambda event: check_strength("Letters", generate_letters_entry, letters_entry_strength))
 generate_cb_letters = ctk.CTkCheckBox(master=generate_frame, text="", variable=cb_generate_let_var, command=lambda: e_d_entries(cb_generate_let_var, generate_letters_entry, "# of Letters"), width=0)
-generate_cb_letters.place(relx=0.2, rely=0.35, anchor=tkinter.W)
+generate_cb_letters.place(relx=0.2, rely=0.45, anchor=tkinter.W)
 
+# Section that deals with # of numbers in the password to generate
 cb_generate_num_var = ctk.IntVar()
 generate_numbers_entry = ctk.CTkEntry(master=generate_frame, placeholder_text="# of Numbers")
-generate_numbers_entry.place(relx=0.3, rely=0.5, anchor=tkinter.W)
+generate_numbers_entry.place(relx=0.3, rely=0.6, anchor=tkinter.W)
+numbers_entry_strength = ctk.CTkLabel(master=generate_frame, text="")
+numbers_entry_strength.place(relx=0.6, rely=0.6, anchor=tkinter.W)
+generate_numbers_entry.bind("<KeyRelease>", lambda event: check_strength("Numbers", generate_numbers_entry, numbers_entry_strength))
 generate_cb_numbers = ctk.CTkCheckBox(master=generate_frame, text="", variable=cb_generate_num_var, command=lambda: e_d_entries(cb_generate_num_var, generate_numbers_entry, "# of Numbers"), width=0)
-generate_cb_numbers.place(relx=0.2, rely=0.5, anchor=tkinter.W)
+generate_cb_numbers.place(relx=0.2, rely=0.6, anchor=tkinter.W)
 
 cb_generate_sym_var = ctk.IntVar()
 generate_symbols_entry = ctk.CTkEntry(master=generate_frame, placeholder_text="# of Symbols")
-generate_symbols_entry.place(relx=0.3, rely=0.65, anchor=tkinter.W)
+generate_symbols_entry.place(relx=0.3, rely=0.75, anchor=tkinter.W)
+symbols_entry_strength = ctk.CTkLabel(master=generate_frame, text="")
+symbols_entry_strength.place(relx=0.6, rely=0.75, anchor=tkinter.W)
+generate_symbols_entry.bind("<KeyRelease>", lambda event: check_strength("Symbols", generate_symbols_entry, symbols_entry_strength))
 generate_cb_symbols = ctk.CTkCheckBox(master=generate_frame, text="", variable=cb_generate_sym_var, command=lambda: e_d_entries(cb_generate_sym_var, generate_symbols_entry, "# of Symbols"), width=0)
-generate_cb_symbols.place(relx=0.2, rely=0.65, anchor=tkinter.W)
+generate_cb_symbols.place(relx=0.2, rely=0.75, anchor=tkinter.W)
 
 generate_output = ctk.CTkTextbox(master=app, width=generate_frame_w, height=floor((screen_h - generate_frame_h) * 0.13))
 generate_output.configure(state="disabled")
@@ -509,7 +540,37 @@ e_d_entries(cb_generate_let_var, generate_letters_entry, "# of Letters")
 e_d_entries(cb_generate_num_var, generate_numbers_entry, "# of Numbers")
 e_d_entries(cb_generate_sym_var, generate_symbols_entry, "# of Symbols")
 
-apply_validation()
+def output_generate_result() -> None:
+    global generate_timer
+    generate_output.configure(state="normal")
+    message = generate_passyword(fetch_cb_states(), generate_pass_length, generate_letters_entry, generate_numbers_entry, generate_symbols_entry)
+    if not message == '':
+        generate_output.delete("0.0", "end")
+        generate_output.insert("0.0", message)
+        generate_output.configure(state="disabled")
+        if 'generate_timer' in globals() and generate_timer is not None:
+            generate_output.after_cancel(generate_timer)
+        def clear_generate_output():
+            generate_output.configure(state="normal")
+            generate_output.delete("0.0", "end")
+            generate_output.configure(state="disabled")
+            global generate_timer
+            generate_timer = None
+        generate_timer = generate_output.after(10000, clear_generate_output)
+
+def copy_passyword(output_box) -> None:
+    output_box.configure(state="normal")
+    passyword = output_box.get("0.0", "end")
+    output_box.configure(state="disabled")
+    pyperclip.copy(passyword.strip())
+
+generate_passyword_button = ctk.CTkButton(master=generate_frame, text="Generate", command=lambda: output_generate_result())
+generate_passyword_button.place(relx=0.5, rely=0.85, anchor=tkinter.N)
+
+clipboard = Image.open(os.path.join(os.path.join(os.getcwd(), "mini_icons"), "clipboard.png"))
+clipboard_img = ctk.CTkImage(light_image=clipboard, dark_image=clipboard, size=(20, 20))
+generate_copy_button = ctk.CTkButton(master=generate_output, text='', image=clipboard_img, command=lambda: copy_passyword(generate_output), fg_color="#1d1e1e", width=0)
+generate_copy_button.place(relx=1.0, rely=0.25, anchor=tkinter.E)
 
 # The frame that contains the area that displays password descriptions and their show buttons
 vault_frame_w = floor(screen_w * 0.4)
@@ -521,6 +582,9 @@ vault_frame.place(x=(screen_w - vault_frame_w - corner_spacing), y=corner_spacin
 vault_output = ctk.CTkTextbox(master=app, width=vault_frame_w, height=floor((screen_h - vault_frame_h) * 0.31))
 vault_output.configure(state="disable")
 vault_output.place(x=(screen_w - vault_frame_w - corner_spacing), y=(screen_h * 0.82))
+
+vault_copy_button = ctk.CTkButton(master=vault_output, text='', image=clipboard_img, command=lambda: copy_passyword(vault_output), fg_color="#1d1e1e", width=0)
+vault_copy_button.place(relx=1.0, rely=0.25, anchor=tkinter.E)
 
 search_bar = ctk.CTkEntry(master=vault_frame, width=(vault_frame_w * 0.97), placeholder_text="🔍 Search")
 search_bar.pack(padx=10, pady=10)
