@@ -1,6 +1,9 @@
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.fernet import Fernet
 import os, sys, shutil, string, random
 import json
 import bcrypt
@@ -9,6 +12,8 @@ import subprocess
 from Crypto.Cipher import Blowfish
 from Crypto.Util.Padding import pad, unpad
 import base64
+
+QUI = 1
 
 # Idk why I have this. I might delete it later since I'll give the user the hidden dir in the repo
 def hidden_dir(dir_name: str) -> None:
@@ -19,7 +24,7 @@ def hidden_dir(dir_name: str) -> None:
         ctypes.windll.kernel32.SetFileAttributesW(dir_name, 0x02)
 
 # Master password checking logic
-def check_master(password) -> bool:
+def check_master(passyword) -> bool:
     enter_helper()
     if os.path.exists("master.json"):
         grant_perms("master.json")
@@ -33,8 +38,8 @@ def check_master(password) -> bool:
         stored_hash = base64.b64decode(stored_hash)
         rm_perms("master.json")
         exit_helper()
-        password = str(password)
-        hashed_pass = bcrypt.hashpw(password.encode(), user_salt)
+        passyword = str(passyword)
+        hashed_pass = bcrypt.hashpw(passyword.encode(), user_salt)
         if hashed_pass == stored_hash:
             return True
         else:
@@ -77,6 +82,41 @@ def enter_helper():
 def exit_helper():
     os.chdir("..")
     rm_perms(".helper")
+
+# Creates a derive key for file encryption using a master password and a salt
+def create_key(passyword: str, salt: bytes) -> bytes:
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
+    return base64.urlsafe_b64encode(kdf.derive(passyword.encode()))
+
+# Encrypts .json files using a derived key
+def enc_file(master_passyword: str, file_location: str, imported_file: bool) -> None:
+    if imported_file:
+        salt = os.urandom(16)
+    else:
+        grant_perms("master.json")
+        with open("master.json", "r") as file:
+            master_data = json.load(file)
+        rm_perms("master.json")
+        salt = base64.b64decode(master_data[0]["saltier"])
+    key = create_key(master_passyword, salt)
+    fernet = Fernet(key)
+    with open(file_location, "r") as f:
+        file_data = f.read()
+    enc_data = fernet.encrypt(file_data.encode())
+    complete = base64.urlsafe_b64encode(salt + enc_data)
+    with open(file_location, "wb") as enc_file:
+        enc_file.write(complete)
+
+def dec_file(master_passyword: str, file_location: str) -> None:
+    with open(file_location, "rb") as file:
+        complete = base64.urlsafe_b64decode(file.read())
+    enc_data = complete[16:]
+    salt = complete[:16]
+    key = create_key(master_passyword, salt)
+    fernet = Fernet(key)
+    dec_data = fernet.decrypt(enc_data)
+    with open(file_location, "w") as dec_file:
+        dec_file.write(dec_data.decode())
 
 # AES algorithm
 class PM_Z:    
@@ -121,6 +161,8 @@ class PM_Z:
             "yes": "z"
         }
         if os.path.exists("manager.json"):
+            grant_perms("manager.json")
+            dec_file(QUI, "manager.json")
             with open("manager.json", "r") as file:
                 try:
                     existing = json.load(file)
@@ -131,13 +173,19 @@ class PM_Z:
             existing = [meta_data]
         with open("manager.json", "w") as file:
             json.dump(existing, file, indent=4)
+        enc_file(QUI, "manager.json", False)
+        rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
         try:
             enter_helper()
+            grant_perms("manager.json")
+            dec_file(QUI, "manager.json")
             with open("manager.json", "r") as file:
                 file_data = json.load(file)
             data = file_data[0]["data"]
+            enc_file(QUI, "manager.json", False)
+            rm_perms("manager.json")
             exit_helper()
             for section in data:
                 if section["desc"] == description:
@@ -187,6 +235,8 @@ class PM_Y:
             "yes": "y"
         }
         if os.path.exists("manager.json"):
+            grant_perms("manager.json")
+            dec_file(QUI, "manager.json")
             with open("manager.json", "r") as file:
                 try:
                     existing = json.load(file)
@@ -197,13 +247,19 @@ class PM_Y:
             existing = [meta_data]
         with open("manager.json", "w") as file:
             json.dump(existing, file, indent=4)
+        enc_file(QUI, "manager.json", False)
+        rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
         try:
             enter_helper()
+            grant_perms("manager.json")
+            dec_file(QUI, "manager.json")
             with open("manager.json", "r") as file:
                 file_data = json.load(file)
             data = file_data[0]["data"]
+            enc_file(QUI, "manager.json", False)
+            rm_perms("manager.json")
             exit_helper()
             for section in data:
                 if section["desc"] == description:
@@ -255,6 +311,8 @@ class PM_X:
             "yes": "x"
         }
         if os.path.exists("manager.json"):
+            grant_perms("manager.json")
+            dec_file(QUI, "manager.json")
             with open("manager.json", "r") as file:
                 try:
                     existing = json.load(file)
@@ -265,13 +323,19 @@ class PM_X:
             existing = [meta_data]
         with open("manager.json", "w") as file:
             json.dump(existing, file, indent=4)
+        enc_file(QUI, "manager.json", False)
+        rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
         try:
             enter_helper()
+            grant_perms("manager.json")
+            dec_file(QUI, "manager.json")
             with open("manager.json", "r") as file:
                 file_data = json.load(file)
             data = file_data[0]["data"]
+            enc_file(QUI, "manager.json", False)
+            rm_perms("manager.json")
             exit_helper()
             for section in data:
                 if section["desc"] == description:
@@ -284,7 +348,7 @@ class PM_X:
             return False
 
 def main():
-    return
+    dec_file("EggsNBacon", "export.json")
 
 if __name__ == "__main__":
     main()
