@@ -119,10 +119,13 @@ def main_login() -> None:
             given_password = password_entry.get()
             correct = check_master(given_password)
             nonlocal attempt
-            correct = True
             if correct:
                 prompt.destroy()
                 app.deiconify()
+                main_work.QUI = given_password
+                exists = present()
+                if (exists):
+                    dump_desc()
                 return
             else:
                 attempt += 1
@@ -208,16 +211,25 @@ def confirm_import() -> None:
             no_button.pack_forget()
             def merge_decision(decision: int) -> None:
                 if decision == 1:
-                    message, file = import_info(True)
+                    merge = True
                 if decision == 0:
-                    message, file = import_info(False)
-                import_label.configure(text=message)
-                if file == '':
-                    import_prompt.destroy()
-                else:
-                    merge_button.pack_forget()
-                    override_button.pack_forget()
-                    dump_desc()
+                    merge = False
+                import_label.configure(text="To import your file, you must enter the master password you used to export this file")
+                merge_button.pack_forget()
+                override_button.pack_forget()
+                master_entry = ctk.CTkEntry(master=import_frame, placeholder_text="Enter Master Password Here")
+                master_entry.pack(padx=20, pady=20, expand=True)
+                def validate_import() -> None:
+                    message, file = import_info(merge, master_entry.get())
+                    if file == '':
+                        import_prompt.destroy()
+                    elif message == "The master password is incorrect":
+                        import_label.configure(text="Incorrect Master Password")
+                    else:
+                        import_label.configure(text=message)
+                        import_button.pack_forget()
+                        master_entry.pack_forget()
+                        dump_desc()
                     def destroy_export_decision(decision: int) -> None:
                         if decision == 1:
                             import_prompt.destroy()
@@ -226,6 +238,8 @@ def confirm_import() -> None:
                             os.remove(file)
                             import_prompt.destroy()
                     keep_button, delete_button = binary_buttons(import_frame, destroy_export_decision, "Keep", "Delete")
+                import_button = ctk.CTkButton(master=import_frame, text="Import", width=0, command= validate_import)
+                import_button.pack(padx=20, pady=20)
             merge_button, override_button = binary_buttons(import_frame, merge_decision, "Merge", "Override")
     yes_button, no_button = binary_buttons(import_frame, import_decision, "Yes", "No")
     import_prompt.grab_set()
@@ -626,10 +640,6 @@ def dump_desc():
             delete_button.grid(row=i, column=2, sticky="e")
         except KeyError:        # I realized that this would happen if the user enters the app without any passwords stored.
             return
-
-exists = present()
-if (exists):
-    dump_desc()
 
 menu_bar = tkinter.Menu(app)
 file_menu = tkinter.Menu(menu_bar, tearoff=0)
