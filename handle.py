@@ -1,4 +1,5 @@
 from main_work import *
+import main_work
 from math import floor
 import pygetwindow
 import time
@@ -9,6 +10,7 @@ from tkinter import *
 from tkinter import filedialog
 from PIL import Image
 import pyperclip
+import cryptography
 
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
@@ -137,9 +139,13 @@ def select_base() -> str:
 def check_base() -> str:
     enter_helper()
     if os.path.exists("manager.json"):
+        grant_perms("manager.json")
+        dec_file(main_work.QUI, "manager.json")
         with open("manager.json", "r") as file:
             data = json.load(file)
         base = data[0]["yes"]
+        enc_file(main_work.QUI, "manager.json", False)
+        rm_perms("manager.json")
     else:
         base = select_base()
     exit_helper()
@@ -237,6 +243,8 @@ def generate_passyword(selection: list, length, letters, numbers, symbols) -> st
 def store(word: str, desc: str) -> None:
     base = check_base()
     enter_helper()
+    grant_perms("manager.json")
+    dec_file(main_work.QUI, "manager.json")
     try:
         with open("manager.json", "r") as file:
             data = json.load(file)
@@ -253,6 +261,8 @@ def store(word: str, desc: str) -> None:
             desc = final_desc
     except FileNotFoundError:
         pass
+    enc_file(main_work.QUI, "manager.json", False)
+    rm_perms("manager.json")
     if base == "z":
         yes = PM_Z(word, desc)
     elif base == "y":
@@ -280,17 +290,22 @@ def delete(word: str, desc: str) -> int:
         check = yes.password.decode()
         if word == check:
             enter_helper()
+            grant_perms("manager.json")
+            dec_file(main_work.QUI, "manager.json")
             with open('manager.json', 'r') as file:
                 full_data = json.load(file)
             full_data[0]["data"] = [entry for entry in full_data[0]["data"] if entry.get('desc') != desc]
             with open('manager.json', 'w') as file:
                 json.dump(full_data, file, indent=4)
+            enc_file(main_work.QUI, "manager.json", False)
+            rm_perms("manager.json")
             exit_helper()
-            return 2
+            delete_result = 2
         else:
-            return 3
+            delete_result = 3
     else:
-        return 3
+        delete_result = 3
+    return delete_result
 
 # Retrieves password from given description.
 def fetch(desc: str) -> str:
@@ -312,9 +327,12 @@ def fetch(desc: str) -> str:
 # Provides access to manager.json (specifically the sensative stuff)
 def access():
     enter_helper()
+    grant_perms("manager.json")
+    dec_file(main_work.QUI, "manager.json")
     with open("manager.json", "r") as file:
         full_data = json.load(file)
     data_section = full_data[0]["data"]
+    enc_file(main_work.QUI, "manager.json", False)
     exit_helper()
     return data_section
 
@@ -328,9 +346,12 @@ def set_master(master_p: str) -> None:
     user_salt = bcrypt.gensalt()
     hashed_master = bcrypt.hashpw(master_p.encode(), user_salt)
     user_salt = base64.b64encode(user_salt).decode("utf-8")
+    salt_again = os.urandom(16)
+    salt_again = base64.b64encode(salt_again).decode("utf-8")
     hashed_master = base64.b64encode(hashed_master).decode("utf-8")
     info = {
         "salt" : user_salt,
+        "saltier": salt_again,
         "hash" : hashed_master
     }
     data = []
@@ -351,13 +372,15 @@ def set_master(master_p: str) -> None:
                 data_entry["salt"] = user_salt
             if "hash" in data_entry:
                 data_entry["hash"] = hashed_master
+            if "saltier" in data_entry:
+                data_entry["saltier"] = salt_again
         with open("master.json", "w") as file:
             json.dump(data, file, indent=4)
         rm_perms("master.json")
         exit_helper()
 
 # Import a file containing password (that was exported from the program) and give the user to merge passwords or override.
-def import_info(merge_decision) -> str:
+def import_info(merge_decision, master_passyword: str) -> str:
     file_path = filedialog.askopenfilename(
         defaultextension=".json",
         filetypes=[("JSON files", "*.json")],
@@ -365,39 +388,43 @@ def import_info(merge_decision) -> str:
         initialfile="export.json"
     )
     if file_path:
-        with open(file_path, "r") as file:
-            given_json = json.load(file)
-        method = given_json[0]["yes"]
-        if given_json[0]["exported_by"] == "PM" and (given_json[0]["yes"] in ("z", "y", "x")):
-            base = given_json[0]["yes"]
-            passyword_count = len(given_json[0]["data"])
-            for i in range(passyword_count):
-                data_section = given_json[0]["data"][i]
-                if base == "z":
-                    try:
-                        assert data_section["desc"] not in [None, '']
-                        assert data_section["enc_k"] not in [None, '']
-                        assert data_section["non"] not in [None, '']
-                        assert data_section["cipher_t"] not in [None, '']
-                        assert data_section["tag"] not in [None, '']
-                    except AssertionError:
-                        return "The file selected was not exported by this program or has been corrupted"
-                elif base == "y":
-                    try:
-                        assert data_section["desc"] not in [None, '']
-                        assert data_section["enc_k"] not in [None, '']
-                        assert data_section["key"] not in [None, '']
-                        assert data_section["iv"] not in [None, '']
-                    except AssertionError:
-                        return "The file selected was not exported by this program or has been corrupted"
-                elif base == "x":
-                    try:
-                        assert data_section["desc"] not in [None, '']
-                        assert data_section["enc_k"] not in [None, '']
-                        assert data_section["key"] not in [None, '']
-                        assert data_section["non"] not in [None, '']
-                    except AssertionError:
-                        return "The file selected was not exported by this program or has been corrupted"
+        try:
+            dec_file(master_passyword, file_path)
+            with open(file_path, "r") as file:
+                given_json = json.load(file)
+            enc_file(master_passyword, file_path, True)
+            if given_json[0]["exported_by"] == "PM" and (given_json[0]["yes"] in ("z", "y", "x")):
+                base = given_json[0]["yes"]
+                passyword_count = len(given_json[0]["data"])
+                for i in range(passyword_count):
+                    data_section = given_json[0]["data"][i]
+                    if base == "z":
+                        try:
+                            assert data_section["desc"] not in [None, '']
+                            assert data_section["enc_k"] not in [None, '']
+                            assert data_section["non"] not in [None, '']
+                            assert data_section["cipher_t"] not in [None, '']
+                            assert data_section["tag"] not in [None, '']
+                        except AssertionError:
+                            return "The file selected was not exported by this program or has been corrupted"
+                    elif base == "y":
+                        try:
+                            assert data_section["desc"] not in [None, '']
+                            assert data_section["enc_k"] not in [None, '']
+                            assert data_section["key"] not in [None, '']
+                            assert data_section["iv"] not in [None, '']
+                        except AssertionError:
+                            return "The file selected was not exported by this program or has been corrupted"
+                    elif base == "x":
+                        try:
+                            assert data_section["desc"] not in [None, '']
+                            assert data_section["enc_k"] not in [None, '']
+                            assert data_section["key"] not in [None, '']
+                            assert data_section["non"] not in [None, '']
+                        except AssertionError:
+                            return "The file selected was not exported by this program or has been corrupted"
+        except cryptography.fernet.InvalidToken:
+            return "The master password is incorrect"
     else:
         message = "The file selected does not exist"
         return message, file_path
@@ -405,10 +432,12 @@ def import_info(merge_decision) -> str:
         file_base = check_base()
         export_base = given_json[0]["yes"]
         export_data = given_json[0]["data"]
+        enter_helper()
         try:
-            enter_helper()
+            dec_file(main_work.QUI, "manager.json")
             with open("manager.json", "r") as file:
                 file_data = json.load(file)
+            enc_file(main_work.QUI, "manager.json", False)
             exit_helper()
         except FileNotFoundError:
             file_destination = os.getcwd()
@@ -474,14 +503,17 @@ def export_info_enc() -> str:
     message = ''
     enter_helper()
     if os.path.exists("manager.json"):
+        dec_file(main_work.QUI, "manager.json")
         with open("manager.json", "r") as file:
             export = json.load(file)
+        enc_file(main_work.QUI, "manager.json", False)
         exit_helper()
         if len(export[0]["data"]) == 0:
             message = "There are no passwords currently stored"
             return message
     else:
         message = "The file does not exist (Try storing some passwords)"
+        exit_helper()
         return message
     file_path = filedialog.asksaveasfilename(
         defaultextension=".json",
@@ -491,9 +523,12 @@ def export_info_enc() -> str:
     )
     if file_path:
         enter_helper()
-        with open(file_path, "w") as file:
-            json.dump(export, file, indent=4)
-        message = "File successfully exported"
+        exported_file = os.path.join(os.getcwd(), "manager.json")
+        try:
+            shutil.copy2(exported_file, file_path)
+            message = "File successfully exported"
+        except:
+            message = "The file or path specified does not exist or is corrupt"
         exit_helper()
     else:
         message = "The file or path specified does not exist"
@@ -534,7 +569,10 @@ def binary_buttons(framework, conf_type, b1, b2):
     return yes_button, no_button
 
 def main():
-    grant_perms(".helper")
+    enter_helper()
+    enc_file("qwertyuiopqwertyuiop", "manager.json", False)
+    rm_perms("manager.json")
+    exit_helper()
 
 if __name__ == "__main__":
     main()
