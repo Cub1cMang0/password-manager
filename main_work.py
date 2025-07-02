@@ -12,8 +12,11 @@ import subprocess
 from Crypto.Cipher import Blowfish
 from Crypto.Util.Padding import pad, unpad
 import base64
+from hashlib import sha256
 
-QUI = 1
+
+QUI = None
+AUTH_TYPE = None
 
 # Idk why I have this. I might delete it later since I'll give the user the hidden dir in the repo
 def hidden_dir(dir_name: str) -> None:
@@ -22,6 +25,25 @@ def hidden_dir(dir_name: str) -> None:
     os.makedirs(dir_name, exist_ok=True)
     if sys.platform == "win32":
         ctypes.windll.kernel32.SetFileAttributesW(dir_name, 0x02)
+
+# Check if the user has 2FA setup (used to avoid or prompt the user of using features that requrie 2FA to be setup).
+def is2FAsetup() -> bool:
+    enter_helper()
+    if not os.path.exists("master.json"):
+        return False
+    grant_perms("master.json")
+    with open("master.json", "r") as file:
+        data = json.load(file)
+    rm_perms("master.json")
+    exit_helper()
+    source = None
+    for section in data:
+        if "2FA" in section:
+            source = section["2FA"]
+    if source == None:
+        return False
+    elif source != None:
+        return True
 
 # Master password checking logic
 def check_master(passyword) -> bool:
@@ -84,39 +106,82 @@ def exit_helper():
     rm_perms(".helper")
 
 # Creates a derive key for file encryption using a master password and a salt
-def create_key(passyword: str, salt: bytes) -> bytes:
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
-    return base64.urlsafe_b64encode(kdf.derive(passyword.encode()))
+def create_key(sussy_secret: str, salt: bytes = None) -> bytes:
+    if salt:
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
+        return base64.urlsafe_b64encode(kdf.derive(sussy_secret.encode()))
+    else:
+        d_key = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        d_key.update(sussy_secret.encode())
+        return base64.urlsafe_b64encode(d_key.finalize())
 
 # Encrypts .json files using a derived key
-def enc_file(master_passyword: str, file_location: str, imported_file: bool) -> None:
-    if imported_file:
-        salt = os.urandom(16)
+def enc_file(master_passyword: str, file_location: str):
+    salty = os.urandom(16)
+    v_key = Fernet.generate_key()
+    key_mp = create_key(master_passyword, salty)
+    fernet_mp = Fernet(key_mp)
+    if is2FAsetup():
+        saltier = ''.join(random.choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(32))
+        key_2fa = create_key(saltier)
+        fernet_2fa = Fernet(key_2fa)
+        enc_v_key_2fa = fernet_2fa.encrypt(v_key)
     else:
-        grant_perms("master.json")
-        with open("master.json", "r") as file:
-            master_data = json.load(file)
-        rm_perms("master.json")
-        salt = base64.b64decode(master_data[0]["saltier"])
-    key = create_key(master_passyword, salt)
-    fernet = Fernet(key)
+        key_2fa = None
+    enc_v_key_mp = fernet_mp.encrypt(v_key)
     with open(file_location, "r") as f:
         file_data = f.read()
-    enc_data = fernet.encrypt(file_data.encode())
-    complete = base64.urlsafe_b64encode(salt + enc_data)
-    with open(file_location, "wb") as enc_file:
-        enc_file.write(complete)
+    fernet_vault = Fernet(v_key)
+    enc_data = fernet_vault.encrypt(file_data.encode())
+    essentials = {
+        "v_key_master": enc_v_key_mp.decode(),
+        "v_key_2fa": None,
+        "salty": base64.b64encode(salty).decode(),
+        "saltier": None,
+        "data": enc_data.decode()
+    }
+    if key_2fa != None:
+        essentials["v_key_2fa"] = enc_v_key_2fa.decode()
+        essentials["saltier"] = saltier
+    with open(file_location, "w") as file:
+        json.dump(essentials, file)
 
-def dec_file(master_passyword: str, file_location: str) -> None:
-    with open(file_location, "rb") as file:
-        complete = base64.urlsafe_b64decode(file.read())
-    enc_data = complete[16:]
-    salt = complete[:16]
-    key = create_key(master_passyword, salt)
+def dec_file(master_passyword: str, auth_type: str, file_location: str) -> None:
+    with open(file_location, "r") as file:
+        complete = json.load(file)
+    salty = base64.b64decode(complete["salty"])
+    enc_v_key = complete["v_key_master"] if auth_type == "master" else complete["v_key_2fa"]
+    if auth_type == "master":
+        key = create_key(master_passyword, salty)
+    elif auth_type == "2fa":
+        saltier_str = complete.get("saltier")
+        if saltier_str is None:
+            return "2FA saltier not found in file.", None, None
+        key = create_key(saltier_str)
+    else:
+        return "Invalid authentication type.", None, None
     fernet = Fernet(key)
-    dec_data = fernet.decrypt(enc_data)
-    with open(file_location, "w") as dec_file:
-        dec_file.write(dec_data.decode())
+    try:
+        v_key = fernet.decrypt(enc_v_key.encode())
+    except:
+        return "Incorrect master password or failed 2FA authentication", None, None
+    fernet_vault = Fernet(v_key)
+    dec_data = fernet_vault.decrypt(complete["data"].encode())
+    return v_key, complete, json.loads(dec_data.decode())
+
+def re_enc_file(v_key: bytes, complete: dict, new_data: dict, file_location: str) -> None:
+    fernet_vault = Fernet(v_key)
+    enc_data = fernet_vault.encrypt(json.dumps(new_data).encode())
+    complete_data = {
+        "v_key_master": complete["v_key_master"],
+        "v_key_2fa": complete["v_key_2fa"],
+        "salty": complete["salty"],
+        "saltier": complete["saltier"],
+        "data": enc_data.decode()
+    }
+    with open(file_location, "w") as file:
+        json.dump(complete_data, file)
+
 
 # AES algorithm
 class PM_Z:    
@@ -162,29 +227,22 @@ class PM_Z:
         }
         if os.path.exists("manager.json"):
             grant_perms("manager.json")
-            dec_file(QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                try:
-                    existing = json.load(file)
-                    existing[0]["data"].append(data)
-                except json.JSONDecodeError:
-                    existing = [meta_data]
+            key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
+            storage_data[0]["data"].append(data)
+            re_enc_file(key, re_enc_data, storage_data, "manager.json")
         else:
             existing = [meta_data]
-        with open("manager.json", "w") as file:
-            json.dump(existing, file, indent=4)
-        enc_file(QUI, "manager.json", False)
-        rm_perms("manager.json")
+            with open("manager.json", "w") as file:
+                json.dump(existing, file, indent=4)
+            enc_file(QUI, "manager.json")
+            rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
+        enter_helper()
         try:
-            enter_helper()
             grant_perms("manager.json")
-            dec_file(QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                file_data = json.load(file)
-            data = file_data[0]["data"]
-            enc_file(QUI, "manager.json", False)
+            key, re_enc_file, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
+            data = storage_data[0]["data"]
             rm_perms("manager.json")
             exit_helper()
             for section in data:
@@ -197,6 +255,7 @@ class PM_Z:
                     return True
             return False
         except FileNotFoundError:
+            exit_helper()
             return False
 
 class PM_Y:
@@ -236,29 +295,22 @@ class PM_Y:
         }
         if os.path.exists("manager.json"):
             grant_perms("manager.json")
-            dec_file(QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                try:
-                    existing = json.load(file)
-                    existing[0]["data"].append(data)
-                except json.JSONDecodeError:
-                    existing = [meta_data]
+            key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
+            storage_data[0]["data"].append(data)
+            re_enc_file(key, re_enc_data, storage_data, "manager.json")
         else:
             existing = [meta_data]
-        with open("manager.json", "w") as file:
-            json.dump(existing, file, indent=4)
-        enc_file(QUI, "manager.json", False)
-        rm_perms("manager.json")
+            with open("manager.json", "w") as file:
+                json.dump(existing, file, indent=4)
+            enc_file(QUI, "manager.json")
+            rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
+        enter_helper()
         try:
-            enter_helper()
             grant_perms("manager.json")
-            dec_file(QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                file_data = json.load(file)
-            data = file_data[0]["data"]
-            enc_file(QUI, "manager.json", False)
+            key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
+            data = storage_data[0]["data"]
             rm_perms("manager.json")
             exit_helper()
             for section in data:
@@ -269,6 +321,7 @@ class PM_Y:
                     return True
             return False
         except FileNotFoundError:
+            exit_helper()
             return False
 
 class PM_X:
@@ -312,29 +365,22 @@ class PM_X:
         }
         if os.path.exists("manager.json"):
             grant_perms("manager.json")
-            dec_file(QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                try:
-                    existing = json.load(file)
-                    existing[0]["data"].append(data)
-                except json.JSONDecodeError:
-                    existing = [meta_data]
+            key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
+            storage_data[0]["data"].append(data)
+            re_enc_file(key, re_enc_data, storage_data, "manager.json")
         else:
             existing = [meta_data]
-        with open("manager.json", "w") as file:
-            json.dump(existing, file, indent=4)
-        enc_file(QUI, "manager.json", False)
-        rm_perms("manager.json")
+            with open("manager.json", "w") as file:
+                json.dump(existing, file, indent=4)
+            enc_file(QUI, "manager.json")
+            rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
+        enter_helper()
         try:
-            enter_helper()
             grant_perms("manager.json")
-            dec_file(QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                file_data = json.load(file)
-            data = file_data[0]["data"]
-            enc_file(QUI, "manager.json", False)
+            key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
+            data = storage_data[0]["data"]
             rm_perms("manager.json")
             exit_helper()
             for section in data:
@@ -345,10 +391,11 @@ class PM_X:
                     return True
             return False
         except FileNotFoundError:
+            exit_helper()
             return False
 
 def main():
-    dec_file("EggsNBacon", "export.json")
-
+    return
+    
 if __name__ == "__main__":
     main()
