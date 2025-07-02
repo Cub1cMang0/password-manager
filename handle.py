@@ -46,26 +46,6 @@ def check_2FA(code: int) -> bool:
     result = totp.verify(code)
     return result
 
-# Check if the user has 2FA setup (used to avoid or prompt the user of using features that requrie 2FA to be setup).
-def is2FAsetup() -> bool:
-    enter_helper()
-    if not os.path.exists("master.json"):
-        exit_helper()
-        return False
-    grant_perms("master.json")
-    with open("master.json", "r") as file:
-        data = json.load(file)
-    rm_perms("master.json")
-    exit_helper()
-    source = None
-    for section in data:
-        if "2FA" in section:
-            source = section["2FA"]
-    if source == None:
-        return False
-    elif source != None:
-        return True
-
 # 2FA disabling logic
 def disable_2FA() -> None:
     enter_helper()
@@ -130,6 +110,13 @@ def setup2FA(yb, nb, app) -> None:
     submit_2FA_b.pack(padx=20, pady=10)
     cur_label.image = qr_code_image
 
+def retrieve_2FA_key() -> str:
+    enter_helper()
+    with open("manager.json", "r") as file:
+        data = json.load(file)
+    exit_helper()
+    return data["saltier"]
+
 # Selects an algorithm for the password managing logic (and to stick to)
 def select_base() -> str:
     letter_range = string.ascii_lowercase[23:25]
@@ -140,11 +127,9 @@ def check_base() -> str:
     enter_helper()
     if os.path.exists("manager.json"):
         grant_perms("manager.json")
-        dec_file(main_work.QUI, "manager.json")
-        with open("manager.json", "r") as file:
-            data = json.load(file)
-        base = data[0]["yes"]
-        enc_file(main_work.QUI, "manager.json", False)
+        key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+        base = storage_data[0]["yes"]
+        re_enc_file(key, re_enc_data, storage_data, "manager.json")
         rm_perms("manager.json")
     else:
         base = select_base()
@@ -243,9 +228,9 @@ def generate_passyword(selection: list, length, letters, numbers, symbols) -> st
 def store(word: str, desc: str) -> None:
     base = check_base()
     enter_helper()
-    grant_perms("manager.json")
-    dec_file(main_work.QUI, "manager.json")
     try:
+        grant_perms("manager.json")
+        key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
         with open("manager.json", "r") as file:
             data = json.load(file)
         desc_section = data[0]["data"]
@@ -259,10 +244,9 @@ def store(word: str, desc: str) -> None:
                     i += 1
                 final_desc = f"{desc} ({i})"
             desc = final_desc
-    except FileNotFoundError:
+        re_enc_file(key, re_enc_data, storage_data, "manager.json")
+    except:
         pass
-    enc_file(main_work.QUI, "manager.json", False)
-    rm_perms("manager.json")
     if base == "z":
         yes = PM_Z(word, desc)
     elif base == "y":
@@ -272,6 +256,7 @@ def store(word: str, desc: str) -> None:
     yes.setup()
     yes.encrypt()
     yes.save_info()
+    rm_perms("manager.json")
     exit_helper()
 
 
@@ -291,13 +276,9 @@ def delete(word: str, desc: str) -> int:
         if word == check:
             enter_helper()
             grant_perms("manager.json")
-            dec_file(main_work.QUI, "manager.json")
-            with open('manager.json', 'r') as file:
-                full_data = json.load(file)
-            full_data[0]["data"] = [entry for entry in full_data[0]["data"] if entry.get('desc') != desc]
-            with open('manager.json', 'w') as file:
-                json.dump(full_data, file, indent=4)
-            enc_file(main_work.QUI, "manager.json", False)
+            key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+            storage_data[0]["data"] = [entry for entry in storage_data[0]["data"] if entry.get('desc') != desc]
+            re_enc_file(key, re_enc_data, storage_data, "manager.json")
             rm_perms("manager.json")
             exit_helper()
             delete_result = 2
@@ -327,13 +308,14 @@ def fetch(desc: str) -> str:
 # Provides access to manager.json (specifically the sensative stuff)
 def access():
     enter_helper()
-    grant_perms("manager.json")
-    dec_file(main_work.QUI, "manager.json")
-    with open("manager.json", "r") as file:
-        full_data = json.load(file)
-    data_section = full_data[0]["data"]
-    enc_file(main_work.QUI, "manager.json", False)
-    exit_helper()
+    try:
+        grant_perms("manager.json")
+        key, re_encrypt_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+        data_section = storage_data[0]["data"]
+        re_enc_file(key, re_encrypt_data, storage_data, "manager.json")
+        exit_helper()
+    except FileNotFoundError:
+        return None
     return data_section
 
 # Sets the user's master password
@@ -389,15 +371,12 @@ def import_info(merge_decision, master_passyword: str) -> str:
     )
     if file_path:
         try:
-            dec_file(master_passyword, file_path)
-            with open(file_path, "r") as file:
-                given_json = json.load(file)
-            enc_file(master_passyword, file_path, True)
-            if given_json[0]["exported_by"] == "PM" and (given_json[0]["yes"] in ("z", "y", "x")):
-                base = given_json[0]["yes"]
-                passyword_count = len(given_json[0]["data"])
+            given_key, given_re_enc_data, given_storage_data = dec_file(master_passyword, main_work.AUTH_TYPE, file_path)
+            if given_storage_data[0]["exported_by"] == "PM" and (given_storage_data[0]["yes"] in ("z", "y", "x")):
+                base = given_storage_data[0]["yes"]
+                passyword_count = len(given_storage_data[0]["data"])
                 for i in range(passyword_count):
-                    data_section = given_json[0]["data"][i]
+                    data_section = given_storage_data[0]["data"][i]
                     if base == "z":
                         try:
                             assert data_section["desc"] not in [None, '']
@@ -430,14 +409,13 @@ def import_info(merge_decision, master_passyword: str) -> str:
         return message, file_path
     if merge_decision:
         file_base = check_base()
-        export_base = given_json[0]["yes"]
-        export_data = given_json[0]["data"]
+        export_base = given_storage_data[0]["yes"]
+        export_data = given_storage_data[0]["data"]
         enter_helper()
         try:
-            dec_file(main_work.QUI, "manager.json")
-            with open("manager.json", "r") as file:
-                file_data = json.load(file)
-            enc_file(main_work.QUI, "manager.json", False)
+            grant_perms("manager.json")
+            key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+            rm_perms("manager.json")
             exit_helper()
         except FileNotFoundError:
             file_destination = os.getcwd()
@@ -445,11 +423,12 @@ def import_info(merge_decision, master_passyword: str) -> str:
             try:
                 shutil.copy2(file_path, file_destination)
                 message = "File successfully imported. Would you like to keep the exported file?"
+                rm_perms("manager.json")
                 exit_helper()
             except:
                 message = "The file selected was not exported by this program or has been corrupted"
             return message, file_path
-        current_descs = [desc.get('desc') for desc in file_data[0]["data"]]
+        current_descs = [desc.get('desc') for desc in storage_data[0]["data"]]
         current_descs = set(current_descs)
         for data_section in export_data:
             description = data_section["desc"]
@@ -503,12 +482,9 @@ def export_info_enc() -> str:
     message = ''
     enter_helper()
     if os.path.exists("manager.json"):
-        dec_file(main_work.QUI, "manager.json")
-        with open("manager.json", "r") as file:
-            export = json.load(file)
-        enc_file(main_work.QUI, "manager.json", False)
+        key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
         exit_helper()
-        if len(export[0]["data"]) == 0:
+        if len(storage_data[0]["data"]) == 0:
             message = "There are no passwords currently stored"
             return message
     else:
@@ -570,8 +546,7 @@ def binary_buttons(framework, conf_type, b1, b2):
 
 def main():
     enter_helper()
-    enc_file("qwertyuiopqwertyuiop", "manager.json", False)
-    rm_perms("manager.json")
+    rm_perms("master.json")
     exit_helper()
 
 if __name__ == "__main__":
