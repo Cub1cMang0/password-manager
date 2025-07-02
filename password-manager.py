@@ -88,7 +88,7 @@ def set_main():
                     app.deiconify()
                 if decision == 1:
                     prompt.destroy()
-                    finished = setup2FA(yes_button, no_button, app)
+                    setup2FA(yes_button, no_button, app)
                     update_2FA_status("Enable 2FA")
             yes_button, no_button = binary_buttons(set_m_frame, twoFA_decision, "Yes", "No")
     submit_b = ctk.CTkButton(set_m_frame, text="Submit", command=submit)
@@ -123,6 +123,7 @@ def main_login() -> None:
                 prompt.destroy()
                 app.deiconify()
                 main_work.QUI = given_password
+                main_work.AUTH_TYPE = "master"
                 exists = present()
                 if (exists):
                     dump_desc()
@@ -154,6 +155,12 @@ def main_login() -> None:
             if successful:
                 prompt.destroy()
                 app.deiconify()
+                main_work.QUI = retrieve_2FA_key()
+                main_work.AUTH_TYPE = "2fa"
+                exists = present()
+                if (exists):
+                    dump_desc()
+                return
             if not successful:
                 check_twoFA.configure(text="Incorrect Code")
                 prompt.after(4000, lambda: check_twoFA.configure(text="Enter the 2FA code found in your authenticator to login"))
@@ -185,6 +192,9 @@ def confirm_export() -> None:
                 export_prompt.destroy()
             else:
                 export_label.configure(text=message)
+                if message == "File successfully exported":
+                    warning_label = ctk.CTkLabel(master=export_frame, text="WARNING: KEEP TRACK OF YOUR CURRENT MASTER PASSWORD IN ORDER TO IMPORT THIS FILE IN THE FUTURE", text_color="red", wraplength=360)
+                    warning_label.pack(padx=10)
                 ok_button = ctk.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
                 ok_button.pack(padx=20, pady=20)
         yes_button.pack_forget()
@@ -286,6 +296,11 @@ def confirm_reset() -> None:
                 submit_2FA_b.pack(padx=20, pady=10)
     yes_button, no_button = binary_buttons(reset_master_frame, reset_master_decision, "Yes", "No")
     reset_master_prompt.grab_set()
+
+# Used to restart the program when the user disables 2FA to avoid side effects
+def restart_program_2FA(prompt) -> None:
+    prompt.destroy()
+    main_login()
     
 # Gives the user the option to (begrudgingly) disable 2FA 
 def confirm_disable_2FA() -> None:
@@ -306,11 +321,12 @@ def confirm_disable_2FA() -> None:
             for child in disable_2FA_frame.winfo_children():
                 child.destroy()
             disable_2FA_prompt.geometry("720x480")
-            disable_success_label = ctk.CTkLabel(disable_2FA_frame, text="2FA has been successfully disabled", wraplength=360)
+            disable_success_label = ctk.CTkLabel(disable_2FA_frame, text="2FA has been successfully disabled, the program will now restart", wraplength=360)
             disable_success_label.pack(padx=20, pady=20)
-            ok_button = ctk.CTkButton(disable_2FA_frame, text="Ok", command= lambda: disable_2FA_prompt.destroy())
+            ok_button = ctk.CTkButton(disable_2FA_frame, text="Ok", command= lambda prompt=disable_2FA_prompt: restart_program_2FA(prompt))
             ok_button.pack(padx=20, pady=20)
             update_2FA_status("Disable 2FA")
+            app.withdraw()
         yes_button.pack_forget()
         no_button.pack_forget()
     yes_button, no_button = binary_buttons(disable_2FA_frame, disable_2FA_decision, "Yes", "No")
@@ -625,6 +641,8 @@ def dump_desc():
     pencil_img = ctk.CTkImage(light_image=pencil, dark_image=pencil, size=(20, 20))
     recycle_img = ctk.CTkImage(light_image=recycle, dark_image=recycle, size=(20, 20))
     data = access()
+    if data == None:
+        return
     for child in storage_content.winfo_children():
         child.destroy()
     storage_content.grid_columnconfigure(0, weight=1)
