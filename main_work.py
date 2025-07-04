@@ -4,7 +4,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.fernet import Fernet
-import os, sys, shutil, string, random
+import os, sys, string, random
 import json
 import bcrypt
 import ctypes
@@ -30,6 +30,7 @@ def hidden_dir(dir_name: str) -> None:
 def is2FAsetup() -> bool:
     enter_helper()
     if not os.path.exists("master.json"):
+        exit_helper()
         return False
     grant_perms("master.json")
     with open("master.json", "r") as file:
@@ -53,9 +54,10 @@ def check_master(passyword) -> bool:
         with open("master.json", "r") as file:
             data = json.load(file)
         for section in data:
-            user_salt = section["salt"]
-            stored_hash = section["hash"]
-            break
+            if "salt" in section:
+                user_salt = section["salt"]
+            if "hash" in section:
+                stored_hash = section["hash"]
         user_salt = base64.b64decode(user_salt)
         stored_hash = base64.b64decode(stored_hash)
         rm_perms("master.json")
@@ -63,6 +65,31 @@ def check_master(passyword) -> bool:
         passyword = str(passyword)
         hashed_pass = bcrypt.hashpw(passyword.encode(), user_salt)
         if hashed_pass == stored_hash:
+            return True
+        else:
+            return False
+    else:
+        exit_helper()
+        return False
+    
+def check_recovery_key(recovery_key) -> bool:
+    enter_helper()
+    if os.path.exists("master.json"):
+        grant_perms("master.json")
+        with open("master.json", "r") as file:
+            data = json.load(file)
+        for section in data:
+            if "rec_salt" in section:
+                user_salt = section["rec_salt"]
+            if "rec_hash" in section:
+                stored_rec_hash = section["rec_hash"]
+        user_salt = base64.b64decode(user_salt)
+        stored_rec_hash = base64.b64decode(stored_rec_hash)
+        rm_perms("master.json")
+        exit_helper()
+        rec_key = str(recovery_key)
+        hashed_rec_key = bcrypt.hashpw(rec_key.encode(), user_salt)
+        if hashed_rec_key == stored_rec_hash:
             return True
         else:
             return False
@@ -144,7 +171,7 @@ def enc_file(master_passyword: str, file_location: str):
         essentials["v_key_2fa"] = enc_v_key_2fa.decode()
         essentials["saltier"] = saltier
     with open(file_location, "w") as file:
-        json.dump(essentials, file)
+        json.dump(essentials, file, indent=4)
 
 def dec_file(master_passyword: str, auth_type: str, file_location: str) -> None:
     with open(file_location, "r") as file:
@@ -180,8 +207,7 @@ def re_enc_file(v_key: bytes, complete: dict, new_data: dict, file_location: str
         "data": enc_data.decode()
     }
     with open(file_location, "w") as file:
-        json.dump(complete_data, file)
-
+        json.dump(complete_data, file, indent=4)
 
 # AES algorithm
 class PM_Z:    
