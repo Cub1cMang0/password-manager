@@ -3,14 +3,14 @@ import main_work
 from math import floor
 import pygetwindow
 import time
-import pyotp, qrcode
+import pyotp, qrcode, shutil
 import customtkinter as ctk
 import tkinter
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image
 import pyperclip
-import cryptography
+import cryptography, secrets
 
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
@@ -71,7 +71,7 @@ def disable_2FA() -> None:
     exit_helper()
 
 # Since 2FA can be enabled later and startup, it makes sense to create a function for it
-def setup2FA(yb, nb, app) -> None:
+def setup2FA(yb, nb, success_function=None) -> None:
     yb.pack_forget()
     nb.pack_forget()
     twoFA_key = setup_qr_code_image()
@@ -102,13 +102,40 @@ def setup2FA(yb, nb, app) -> None:
             rm_perms("master.json")
             exit_helper()
             cur_prompt.destroy()
-            app.deiconify()
+            if not isinstance(success_function, type(None)):
+                success_function()
         else:
-            cur_label.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect Code", compound="top")
+            cur_label.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect code", compound="top")
             twoFA_entry.delete(0, "end")
     submit_2FA_b = ctk.CTkButton(cur_frame, text="Submit", command=submit_2FA)
     submit_2FA_b.pack(padx=20, pady=10)
     cur_label.image = qr_code_image
+    cur_prompt.grab_set()
+
+def recover_account(rec_button, previous_prompt, success_function) -> None:
+    previous_prompt.destroy()
+    rec_button.pack_forget()
+    recover_prompt = ctk.CTkToplevel()
+    recover_prompt.title("Recover Account")
+    recover_prompt.geometry("720x480")
+    recover_frame = ctk.CTkFrame(recover_prompt)
+    recover_frame.pack(padx=20, pady=20)
+    recover_label = ctk.CTkLabel(recover_frame, text="Enter the recovery key that was provided during setup")
+    recover_label.pack(padx=20, pady=20)
+    recover_entry = ctk.CTkEntry(recover_frame, placeholder_text="Enter Recovery Key Here")
+    recover_entry.pack(padx=20, pady=20)
+    def submit_recovery_key():
+        successful = check_recovery_key(recover_entry.get())
+        if successful:
+            recover_prompt.destroy()
+            success_function()
+        else:
+            recover_label.configure(text="Incorrect recovery key")
+            recover_entry.delete(0, "end")
+    submit_key = ctk.CTkButton(recover_frame, text="Submit", command=submit_recovery_key)
+    submit_key.pack(padx=20, pady=20)
+    recover_prompt.grab_set()
+
 
 def retrieve_2FA_key() -> str:
     enter_helper()
@@ -164,12 +191,21 @@ def check_strength(criteria: str, entry_widget, entry_label) -> None:
                 entry_label.configure(text="Strong", text_color="green")
             else:
                 entry_label.configure(text="")
+    else:
+        entry_label.configure(text="")
 
 # Password-generating function that includes all letters a-Z, numbers 0-9, and non conflicting symbols "!@#$%^&*()-_=+[]{};:,.?/"
-def generate_passyword(selection: list, length, letters, numbers, symbols) -> str:
+def generate_passyword(selection: list, length) -> str:
     passyword = ''
-    passy_length = int(length.get())
-    remaining = int(length.get())
+    if length.get() == '':
+        return "Password length not specified"
+    else:
+        passy_length = int(length.get())
+        remaining = int(length.get())
+    if passy_length > 64:
+        return "Password is too long"
+    if passy_length < 8:
+        return "Password is too short"
     selected = []
     selection_length = 0
     letters_length = ''
@@ -341,8 +377,11 @@ def set_master(master_p: str) -> None:
     exit_helper()
     if not is2FAsetup():
         enter_helper()
+        if os.path.exists("master.json"):
+            grant_perms("master.json")
         with open("master.json", "w") as file:
             json.dump(data, file, indent=4)
+        rm_perms("master.json")
         exit_helper()
     else:
         enter_helper()
@@ -361,6 +400,25 @@ def set_master(master_p: str) -> None:
         rm_perms("master.json")
         exit_helper()
 
+def save_recover_key(recover_key: str):
+    user_salt = bcrypt.gensalt()
+    hashed_rec_key = bcrypt.hashpw(recover_key.encode(), user_salt)
+    user_salt = base64.b64encode(user_salt).decode("utf-8")
+    hashed_rec_key = base64.b64encode(hashed_rec_key).decode("utf-8")
+    info = {
+        "rec_salt": user_salt,
+        "rec_hash": hashed_rec_key,
+    }
+    enter_helper()
+    grant_perms("master.json")
+    with open("master.json", "r") as file:
+        data = json.load(file)
+    data.append(info)
+    with open("master.json", "w") as new_file:
+        json.dump(data, new_file, indent=4)
+    rm_perms("master.json")
+    exit_helper()
+
 # Import a file containing password (that was exported from the program) and give the user to merge passwords or override.
 def import_info(merge_decision, master_passyword: str) -> str:
     file_path = filedialog.askopenfilename(
@@ -372,7 +430,7 @@ def import_info(merge_decision, master_passyword: str) -> str:
     if file_path:
         try:
             given_key, given_re_enc_data, given_storage_data = dec_file(master_passyword, main_work.AUTH_TYPE, file_path)
-            if given_storage_data[0]["exported_by"] == "PM" and (given_storage_data[0]["yes"] in ("z", "y", "x")):
+            if given_key != "Incorrect master password or failed 2FA authentication" and given_storage_data[0]["exported_by"] == "PM" and (given_storage_data[0]["yes"] in ("z", "y", "x")):
                 base = given_storage_data[0]["yes"]
                 passyword_count = len(given_storage_data[0]["data"])
                 for i in range(passyword_count):
@@ -402,8 +460,10 @@ def import_info(merge_decision, master_passyword: str) -> str:
                             assert data_section["non"] not in [None, '']
                         except AssertionError:
                             return "The file selected was not exported by this program or has been corrupted"
+            else:
+                return "The master password is incorrect", None
         except cryptography.fernet.InvalidToken:
-            return "The master password is incorrect"
+            return "The master password is incorrect", None
     else:
         message = "The file selected does not exist"
         return message, file_path
@@ -486,11 +546,11 @@ def export_info_enc() -> str:
         exit_helper()
         if len(storage_data[0]["data"]) == 0:
             message = "There are no passwords currently stored"
-            return message
+            return message, None
     else:
         message = "The file does not exist (Try storing some passwords)"
         exit_helper()
-        return message
+        return message, None
     file_path = filedialog.asksaveasfilename(
         defaultextension=".json",
         filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
@@ -544,10 +604,29 @@ def binary_buttons(framework, conf_type, b1, b2):
     no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
     return yes_button, no_button
 
-def main():
+def load_lockout_data():
     enter_helper()
-    rm_perms("master.json")
+    if os.path.exists("lockout.json"):
+        with open("lockout.json", "r") as f:
+            exit_helper()
+            return json.load(f)
     exit_helper()
+    return {"attempts": 0, "remaining": 0}
+
+def save_lockout_data(attempts: int, remaining: int):
+    enter_helper()
+    with open("lockout.json", "w") as f:
+        json.dump({"attempts": attempts, "remaining": remaining}, f)
+    exit_helper()
+
+def clear_lockout():
+    enter_helper()
+    if os.path.exists("lockout.json"):
+        os.remove("lockout.json")
+    exit_helper()
+
+def main():
+    return
 
 if __name__ == "__main__":
     main()
