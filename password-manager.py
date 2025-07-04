@@ -50,7 +50,7 @@ def rm_message(message_input):
     message_input.set("")
 
 # Used to set the master password for teh user the first time. Also, gives the user an option to enable 2FA.
-def set_main():
+def set_main(generate_rc: bool):
     twoFA_already = is2FAsetup()
     prompt = ctk.CTkToplevel()
     prompt.title("Setup")
@@ -65,6 +65,19 @@ def set_main():
     question.pack(padx=20, pady=20)
     answer = ctk.CTkEntry(set_m_frame, width=200)
     answer.pack(padx=20, pady=10)
+    def display_recover_key() -> None:
+        recover_key = secrets.token_hex(16)
+        print(recover_key)
+        save_recover_key(recover_key)
+        prompt.deiconify()
+        question.configure(text=f"Here is your recovery key for later account recovery: {recover_key}")
+        warning_label = ctk.CTkLabel(set_m_frame, text="KEEP THIS RECOEVRY KEEP IN A SAFE LOCATION", text_color="red", wraplength=360)
+        warning_label.pack(padx=20, pady=20)
+        def finish_setup():
+            prompt.destroy()
+            app.deiconify()
+        ok_button = ctk.CTkButton(set_m_frame, text="Ok", command=finish_setup)
+        ok_button.pack(padx=20, pady=20)
     def submit():
         password = answer.get()
         if len(password) < 20:
@@ -77,19 +90,27 @@ def set_main():
         answer.pack_forget()
         submit_b.pack_forget()
         if twoFA_already:
-            prompt.destroy()
-            app.deiconify()
+            if not generate_rc:
+                prompt.destroy()
+                app.deiconify()
+            else:
+                display_recover_key()
         else:
             question.configure(set_m_frame, text="Would you like to enable 2FA? (Note: 2FA is required to reset master password)")
             def twoFA_decision(decision: int):
+                prompt.withdraw()
+                yes_button.pack_forget()
+                no_button.pack_forget()
                 if decision == 0:
                     update_2FA_status("Disable 2FA")
-                    prompt.destroy()
-                    app.deiconify()
+                    if generate_rc:
+                        display_recover_key()
                 if decision == 1:
-                    prompt.destroy()
-                    setup2FA(yes_button, no_button, app)
-                    update_2FA_status("Enable 2FA")
+                    def post_success():
+                        update_2FA_status("Enable 2FA")
+                        if generate_rc:
+                            display_recover_key()
+                    setup2FA(yes_button, no_button, post_success)
             yes_button, no_button = binary_buttons(set_m_frame, twoFA_decision, "Yes", "No")
     submit_b = ctk.CTkButton(set_m_frame, text="Submit", command=submit)
     submit_b.pack(pady=20)
@@ -97,10 +118,31 @@ def set_main():
 
 #Of course, the classic master password check to make sure that no one besides the user can get access to the application. Or use 2FA if the user enabled it
 def main_login() -> None:
-    attempt = 0
+    lockout_data = load_lockout_data()
+    remaining_time = lockout_data["remaining"]
+    attempt = lockout_data["attempts"]
     prompt = ctk.CTkToplevel()
     prompt.title("Login")
     prompt.geometry("720x480")
+    if remaining_time > 0:
+        lockout_label = ctk.CTkLabel(prompt, text="")
+        lockout_label.pack(padx=20, pady=20)
+        def update_timer(time_left):
+            if time_left <= 0:
+                lockout_label.configure(text="Lockout has expired. Restart the program.")
+                clear_lockout()
+                return
+            lockout_label.configure(text=f"Too many failed attempts, try again in {time_left} seconds")
+            prompt.after(1000, lambda: update_timer(time_left - 1))
+            save_lockout_data(attempt, time_left)
+        update_timer(remaining_time)
+        def successful_recovery():
+            clear_lockout()
+            set_main(True)
+        recover_button = ctk.CTkButton(prompt, text="Recover Account")
+        recover_button.configure(command=lambda: recover_account(recover_button, prompt, successful_recovery))
+        recover_button.pack(padx=20, pady=20)
+        return
     def master_login_logic(twoFA_enabled: bool):
         for child in prompt.winfo_children():
             child.destroy()
@@ -120,19 +162,24 @@ def main_login() -> None:
             correct = check_master(given_password)
             nonlocal attempt
             if correct:
+                clear_lockout()
                 prompt.destroy()
                 app.deiconify()
                 main_work.QUI = given_password
                 main_work.AUTH_TYPE = "master"
-                exists = present()
-                if (exists):
+                if present():
                     dump_desc()
                 return
             else:
                 attempt += 1
-                if attempt == 5:
-                    sys.exit()
-                check.configure(text=f"Password is incorrect, you have {5-attempt} attempts left.", wraplength=360)
+                if attempt >= 5:
+                    save_lockout_data(attempt, 60)
+                    prompt.destroy()
+                    main_login()
+                    return
+                else:
+                    save_lockout_data(attempt, 0)
+                    check.configure(text=f"Password is incorrect, you have {5-attempt} attempts left", wraplength=360)
         check_password = ctk.CTkButton(frame, text="Login", command=master_login)
         check_password.pack(pady=10)
         use_2FA = ctk.CTkButton(frame, text="Login via 2FA", command=login_2FA_logic)
@@ -151,18 +198,27 @@ def main_login() -> None:
         twoFA_entry = ctk.CTkEntry(frame_2FA, placeholder_text="Enter 2FA code here", width=200)
         twoFA_entry.pack(padx=20, pady=20)
         def authenticate_2FA():
+            nonlocal attempt
             successful = check_2FA(twoFA_entry.get())
             if successful:
+                clear_lockout()
                 prompt.destroy()
                 app.deiconify()
                 main_work.QUI = retrieve_2FA_key()
                 main_work.AUTH_TYPE = "2fa"
-                exists = present()
-                if (exists):
+                if present():
                     dump_desc()
                 return
             if not successful:
-                check_twoFA.configure(text="Incorrect Code")
+                attempt += 1
+                if attempt >= 5:
+                    save_lockout_data(attempt, 60)
+                    prompt.destroy()
+                    main_login()
+                    return
+                else:
+                    save_lockout_data(attempt, 0)
+                    check_twoFA.configure(text=f"Code is incorrect, you have {5 - attempt} attempts left")
                 prompt.after(4000, lambda: check_twoFA.configure(text="Enter the 2FA code found in your authenticator to login"))
                 twoFA_entry.delete(0, "end")
         check_code = ctk.CTkButton(frame_2FA, text="Login", command=authenticate_2FA)
@@ -190,15 +246,21 @@ def confirm_export() -> None:
             message, file = export_info_enc()
             if file == '':
                 export_prompt.destroy()
+            elif file == None:
+                export_label.configure(text=message)
+                yes_button.pack_forget()
+                no_button.pack_forget()
+                ok_button = ctk.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
+                ok_button.pack(padx=20, pady=20)
             else:
                 export_label.configure(text=message)
                 if message == "File successfully exported":
+                    yes_button.pack_forget()
+                    no_button.pack_forget()
                     warning_label = ctk.CTkLabel(master=export_frame, text="WARNING: KEEP TRACK OF YOUR CURRENT MASTER PASSWORD IN ORDER TO IMPORT THIS FILE IN THE FUTURE", text_color="red", wraplength=360)
                     warning_label.pack(padx=10)
                 ok_button = ctk.CTkButton(export_frame, text="Ok", command= lambda: export_prompt.destroy())
                 ok_button.pack(padx=20, pady=20)
-        yes_button.pack_forget()
-        no_button.pack_forget()
     yes_button, no_button = binary_buttons(export_frame, export_decision, "Yes", "No")
     export_prompt.grab_set()
 
@@ -234,20 +296,21 @@ def confirm_import() -> None:
                     if file == '':
                         import_prompt.destroy()
                     elif message == "The master password is incorrect":
-                        import_label.configure(text="Incorrect Master Password")
+                        import_label.configure(text="Incorrect master password")
+                        app.after(5000, lambda: import_label.configure(text="To import your file, you must enter the master password you used to export this file"))
                     else:
                         import_label.configure(text=message)
                         import_button.pack_forget()
                         master_entry.pack_forget()
                         dump_desc()
-                    def destroy_export_decision(decision: int) -> None:
-                        if decision == 1:
-                            import_prompt.destroy()
-                            return
-                        if decision == 0:
-                            os.remove(file)
-                            import_prompt.destroy()
-                    keep_button, delete_button = binary_buttons(import_frame, destroy_export_decision, "Keep", "Delete")
+                        def destroy_export_decision(decision: int) -> None:
+                            if decision == 1:
+                                import_prompt.destroy()
+                                return
+                            if decision == 0:
+                                os.remove(file)
+                                import_prompt.destroy()
+                        keep_button, delete_button = binary_buttons(import_frame, destroy_export_decision, "Keep", "Delete")
                 import_button = ctk.CTkButton(master=import_frame, text="Import", width=0, command= validate_import)
                 import_button.pack(padx=20, pady=20)
             merge_button, override_button = binary_buttons(import_frame, merge_decision, "Merge", "Override")
@@ -288,7 +351,7 @@ def confirm_reset() -> None:
                     successful = check_2FA(code_2FA)
                     if successful:
                         reset_master_prompt.destroy()
-                        set_main()
+                        set_main(False)
                     else:
                         reset_label.configure(text="Incorrect Code")
                         twoFA_entry.delete(0, "end")
@@ -347,7 +410,7 @@ def confirm_enable_2FA() -> None:
             return
         if decision == 1:
             enable_2FA_prompt.destroy()
-            setup2FA(yes_button, no_button, app)
+            setup2FA(yes_button, no_button)
             update_2FA_status("Enable 2FA")
     yes_button, no_button = binary_buttons(enable_2FA_frame, enable_2FA_decision, "Yes", "No")
     enable_2FA_prompt.grab_set()
@@ -440,7 +503,7 @@ first = first_time()
 app = ctk.CTk()
 if first:
     app.withdraw()
-    set_main()
+    set_main(True)
 else:
     app.withdraw()
     main_login()
@@ -516,7 +579,6 @@ def fetch_cb_states() -> list:
         checkbox_states.append((0, generate_symbols_entry.get()))
     return checkbox_states
 
-
 # The frame that contains the area to generate passwords.
 generate_frame_w = entry_frame_w
 generate_frame_h = entry_frame_h
@@ -573,7 +635,7 @@ e_d_entries(cb_generate_sym_var, generate_symbols_entry, "# of Symbols")
 def output_generate_result() -> None:
     global generate_timer
     generate_output.configure(state="normal")
-    message = generate_passyword(fetch_cb_states(), generate_pass_length, generate_letters_entry, generate_numbers_entry, generate_symbols_entry)
+    message = generate_passyword(fetch_cb_states(), generate_pass_length)
     if not message == '':
         generate_output.delete("0.0", "end")
         generate_output.insert("0.0", message)
