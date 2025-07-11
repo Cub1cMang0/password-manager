@@ -156,6 +156,7 @@ def enc_file(master_passyword: str, file_location: str):
     else:
         key_2fa = None
     enc_v_key_mp = fernet_mp.encrypt(v_key)
+    enter_helper()
     with open(file_location, "r") as f:
         file_data = f.read()
     fernet_vault = Fernet(v_key)
@@ -172,12 +173,17 @@ def enc_file(master_passyword: str, file_location: str):
         essentials["saltier"] = saltier
     with open(file_location, "w") as file:
         json.dump(essentials, file, indent=4)
+    rm_perms(file_location)
+    exit_helper()
 
 def dec_file(master_passyword: str, auth_type: str, file_location: str) -> None:
     with open(file_location, "r") as file:
         complete = json.load(file)
-    salty = base64.b64decode(complete["salty"])
-    enc_v_key = complete["v_key_master"] if auth_type == "master" else complete["v_key_2fa"]
+    for section in complete:
+        if "salty" in section:
+            salty = base64.b64decode(complete["salty"])
+        if "v_key_master" in section or "v_key_2fa" in section:
+            enc_v_key = complete["v_key_master"] if auth_type == "master" else complete["v_key_2fa"]
     if auth_type == "master":
         key = create_key(master_passyword, salty)
     elif auth_type == "2fa":
@@ -246,29 +252,30 @@ class PM_Z:
             "cipher_t": base64.b64encode(self.cipher_t).decode(),
             "tag": base64.b64encode(self.auth_t).decode()
         }
-        meta_data = {
-            "exported_by": "PM",
-            "data": [data],
-            "yes": "z"
-        }
+        enter_helper()
         if os.path.exists("manager.json"):
             grant_perms("manager.json")
             key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
-            storage_data[0]["data"].append(data)
+            storage_data["data"].append(data)
             re_enc_file(key, re_enc_data, storage_data, "manager.json")
+            exit_helper()
         else:
-            existing = [meta_data]
+            meta_data = {
+                "exported_by": "PM",
+                "data": [data],
+                "yes": "z"
+            }
             with open("manager.json", "w") as file:
-                json.dump(existing, file, indent=4)
+                json.dump(meta_data, file, indent=4)
+            exit_helper()
             enc_file(QUI, "manager.json")
-            rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
         enter_helper()
         try:
             grant_perms("manager.json")
             key, re_enc_file, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
-            data = storage_data[0]["data"]
+            data = storage_data["data"]
             rm_perms("manager.json")
             exit_helper()
             for section in data:
@@ -314,29 +321,30 @@ class PM_Y:
             "key": base64.b64encode(self.key).decode(),
             "iv": base64.b64encode(self.iv).decode()
         }
-        meta_data = {
-            "exported_by": "PM",
-            "data": [data],
-            "yes": "y"
-        }
+        enter_helper()
         if os.path.exists("manager.json"):
             grant_perms("manager.json")
             key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
-            storage_data[0]["data"].append(data)
+            storage_data["data"].append(data)
             re_enc_file(key, re_enc_data, storage_data, "manager.json")
+            exit_helper()
         else:
-            existing = [meta_data]
+            meta_data = {
+                "exported_by": "PM",
+                "data": [data],
+                "yes": "y"
+            }
             with open("manager.json", "w") as file:
-                json.dump(existing, file, indent=4)
+                json.dump(meta_data, file, indent=4)
+            exit_helper()
             enc_file(QUI, "manager.json")
-            rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
         enter_helper()
         try:
             grant_perms("manager.json")
             key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
-            data = storage_data[0]["data"]
+            data = storage_data["data"]
             rm_perms("manager.json")
             exit_helper()
             for section in data:
@@ -384,29 +392,30 @@ class PM_X:
             "key": base64.b64encode(self.key).decode(),
             "non": base64.b64encode(self.nonce).decode(),
         }
-        meta_data = {
-            "exported_by": "PM",
-            "data": [data],
-            "yes": "x"
-        }
+        enter_helper()
         if os.path.exists("manager.json"):
             grant_perms("manager.json")
             key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
-            storage_data[0]["data"].append(data)
+            storage_data["data"].append(data)
             re_enc_file(key, re_enc_data, storage_data, "manager.json")
+            exit_helper()
         else:
-            existing = [meta_data]
+            meta_data = {
+                "exported_by": "PM",
+                "data": [data],
+                "yes": "x"
+            }
             with open("manager.json", "w") as file:
-                json.dump(existing, file, indent=4)
+                json.dump(meta_data, file, indent=4)
+            exit_helper()
             enc_file(QUI, "manager.json")
-            rm_perms("manager.json")
 
     def load_info(self, description: str) -> bool:
         enter_helper()
         try:
             grant_perms("manager.json")
             key, re_enc_data, storage_data = dec_file(QUI, AUTH_TYPE, "manager.json")
-            data = storage_data[0]["data"]
+            data = storage_data["data"]
             rm_perms("manager.json")
             exit_helper()
             for section in data:
