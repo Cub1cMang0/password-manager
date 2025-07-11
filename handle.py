@@ -1,3 +1,4 @@
+import tkinter.colorchooser
 from main_work import *
 import main_work
 from math import floor
@@ -11,6 +12,231 @@ from tkinter import filedialog
 from PIL import Image
 import pyperclip
 import cryptography, secrets
+
+FIRST_COLOR = None
+SECOND_COLOR = None
+THIRD_COLOR = None
+FOURTH_COLOR = None
+TEXT_COLOR = None
+COLOR_THEME = None
+FONT = None
+
+# Used to change the global variables  that are used to set the theme of the GUI
+def update_theme(theme_color: str) -> None:
+    global FIRST_COLOR
+    global SECOND_COLOR
+    global THIRD_COLOR
+    global FOURTH_COLOR
+    if theme_color == "red":
+        FIRST_COLOR = "#800000"
+        SECOND_COLOR = "#D30000"
+        THIRD_COLOR = "#770000"
+        FOURTH_COLOR = "#B30303"
+    elif theme_color == "orange":
+        FIRST_COLOR = "#EE6A0B"
+        SECOND_COLOR = "#FF6A00"
+        THIRD_COLOR = "#DD6713"
+        FOURTH_COLOR = "#EF820D"
+    elif theme_color == "yellow":
+        FIRST_COLOR = "#FFD300"
+        SECOND_COLOR = "#FFF200"
+        THIRD_COLOR = "#E4CD05"
+        FOURTH_COLOR = "#FCE205"
+    elif theme_color == "green":
+        FIRST_COLOR = "#0B6623"
+        SECOND_COLOR = "#3BB143"
+        THIRD_COLOR = "#03583C"
+        FOURTH_COLOR = "#00A86B"
+    elif theme_color == "blue":
+        FIRST_COLOR = "#000080"
+        SECOND_COLOR = "#3944BC"
+        THIRD_COLOR = "#122766"
+        FOURTH_COLOR = "#1134A6"
+    elif theme_color == "purple":
+        FIRST_COLOR = "#6F2DA8"
+        SECOND_COLOR = "#A45EE9"
+        THIRD_COLOR = "#5C0291"
+        FOURTH_COLOR = "#8F00FF"
+    elif theme_color == "black":
+        FIRST_COLOR = "#212122"
+        SECOND_COLOR = "#26282A"
+        THIRD_COLOR = "#231F20"
+        FOURTH_COLOR = "#353839"
+    elif theme_color == "white":
+        FIRST_COLOR = "#FFFFFF"
+        SECOND_COLOR = "#F8F8FF"
+        THIRD_COLOR = "#FCF9F9"
+        FOURTH_COLOR = "#F7F6F4"
+    return FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR
+
+# Sets the selected them to all CTk objects
+def set_theme(widget):
+    for child in widget.winfo_children():
+        if getattr(child, "no_theme", False):
+            continue
+        elif isinstance(child, ctk.CTkToplevel):
+            child.configure(fg_color=FIRST_COLOR)
+        elif isinstance(child, ctk.CTkFrame) or isinstance(child, ctk.CTkScrollableFrame):
+            child.configure(fg_color=SECOND_COLOR)
+        elif isinstance(child, ctk.CTkButton):
+            child.configure(fg_color=FOURTH_COLOR)
+        elif isinstance(child, ctk.CTkEntry) or isinstance(child, ctk.CTkCheckBox):
+            child.configure(fg_color=FIRST_COLOR, border_color=THIRD_COLOR)
+        elif isinstance(child, ctk.CTkTextbox):
+            child.configure(fg_color=THIRD_COLOR)
+        set_theme(child)
+
+# Used to execute the change in theme color whilst saving the user's selection (at least the ones that utilize the color attribute)
+def color_change(color: str, app) -> None:
+    FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR = update_theme(color)
+    save_theme()
+    set_theme(app)
+    app.configure(fg_color=FIRST_COLOR)
+
+# Save the user's selected theme
+def save_theme() -> None:
+    enter_helper()
+    grant_perms("master.json")
+    with open("master.json", "r") as file:
+        data = json.load(file)
+    first_theme = True
+    for section in data:
+        if "theme" in section:
+            section["theme"] = (FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR)
+            first_theme = False
+    if first_theme:
+        new_theme = {"theme": (FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR)}
+        data.append(new_theme)
+    with open("master.json", "w") as new_file:
+        json.dump(data, new_file, indent=4)
+    rm_perms("master.json")
+    exit_helper()
+
+# Loads in the user's previously selected color theme
+def load_theme() -> tuple[str, str, str, str]:
+    enter_helper()
+    if os.path.exists("master.json"):
+        grant_perms("master.json")
+        with open("master.json", "r") as file:
+            data = json.load(file)
+        global FIRST_COLOR
+        global SECOND_COLOR
+        global THIRD_COLOR
+        global FOURTH_COLOR
+        try:
+            for section in data:
+                if "theme" in section:
+                    FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR = section["theme"]
+                    break
+        except:
+            FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR = (None, None, None, None)
+        rm_perms("master.json")
+        exit_helper()
+        return FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR
+    else:
+        exit_helper()
+        return None, None, None, None
+
+def update_font(font_name: str) -> None:
+    global FONT
+    FONT = ctk.CTkFont(family=font_name, weight="normal")
+
+# Sets the user's selected font to all CTk Objects (at least the ones that utilize the font attribute)
+def set_font(font_name, widget):
+    update_font(font_name)
+    for child in widget.winfo_children():
+        if getattr(child, "no_font", False):
+            continue
+        if isinstance(child, (ctk.CTkButton, ctk.CTkEntry, ctk.CTkLabel, ctk.CTkTextbox)):
+            child.configure(font=FONT)
+        set_font(font_name, child)
+
+# Set the user's selected text color to all CTk objects (at least the ones that utilize the font attribute)
+def text_color_change(text_color: str, widget):
+    global TEXT_COLOR
+    TEXT_COLOR = text_color
+    for child in widget.winfo_children():
+        if isinstance(child, (ctk.CTkButton, ctk.CTkLabel, ctk.CTkTextbox)):
+            child.configure(text_color=TEXT_COLOR)
+        elif isinstance(child, ctk.CTkEntry):
+            child.configure(text_color=TEXT_COLOR, placeholder_text_color=TEXT_COLOR)
+        text_color_change(TEXT_COLOR, child)
+
+# Save text info from the user's theme
+def save_text_info() -> None:
+    global FONT
+    global TEXT_COLOR
+    enter_helper()
+    grant_perms("master.json")
+    with open("master.json", "r") as file:
+        data = json.load(file)
+    first_text_theme = True
+    for section in data:
+        if "text_theme" in section:
+            section["text_theme"] = (FONT.cget("family"), TEXT_COLOR)
+            first_text_theme = False
+    if first_text_theme:
+        text_data = {"text_theme": (FONT.cget("family"), TEXT_COLOR)}
+        data.append(text_data)
+    with open("master.json", "w") as new_file:
+        json.dump(data, new_file, indent=4)
+    rm_perms("master.json")
+    exit_helper()
+
+# Loads the user's text theme
+def load_text_theme() -> tuple[str, str]:
+    enter_helper()
+    if os.path.exists("master.json"):
+        grant_perms("master.json")
+        with open("master.json", "r") as file:
+            data = json.load(file)
+        global FONT
+        global TEXT_COLOR
+        try:
+            for section in data:
+                if "text_theme" in section:
+                    FONT, TEXT_COLOR = section["text_theme"]
+                    FONT = ctk.CTkFont(family=FONT, weight="normal")
+                    break
+        except:
+            FONT, TEXT_COLOR = (None, None)
+        rm_perms("master.json")
+        exit_helper()
+        return FONT, TEXT_COLOR
+    else:
+        exit_helper()
+        return None, None
+
+def save_font_theme(font_name, app) -> None:
+    set_font(font_name, app)
+    save_text_info()
+
+def save_text_theme(text_color: str, app) -> None:
+    text_color_change(text_color, app)
+    save_text_info()
+
+# Set the user's custom color to the GUI's section (i.e. CTkFrame/CTkScrollableFrame, CTkButton, etc.)
+def customize_section_color(section: str, app) -> None: 
+    chosen_color = tkinter.colorchooser.askcolor(title="Choose Color")
+    if chosen_color[1]:
+        if section == "Background/Entry":
+            global FIRST_COLOR
+            FIRST_COLOR = chosen_color[1]
+        elif section == "Frames":
+            global SECOND_COLOR
+            SECOND_COLOR = chosen_color[1]
+        elif section == "Output Text":
+            global THIRD_COLOR
+            THIRD_COLOR = chosen_color[1]
+        elif section == "Buttons":
+            global FOURTH_COLOR
+            FOURTH_COLOR = chosen_color[1]
+        set_theme(app)
+
+def save_custom_colors(section: str, app) -> None:
+    customize_section_color(section, app)
+    app.configure(fg_color=FIRST_COLOR)
+    save_theme()
 
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
@@ -77,14 +303,14 @@ def setup2FA(yb, nb, success_function=None) -> None:
     twoFA_key = setup_qr_code_image()
     qr_code = open_image()
     qr_code_image = ctk.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
-    cur_prompt = ctk.CTkToplevel()
+    cur_prompt = ctk.CTkToplevel(fg_color=FIRST_COLOR)
     cur_prompt.title("Setup 2FA")
     cur_prompt.geometry("700x790")
-    cur_frame = ctk.CTkFrame(cur_prompt)
+    cur_frame = ctk.CTkFrame(cur_prompt, fg_color=SECOND_COLOR)
     cur_frame.pack(padx=20, pady=20, expand=True)
-    cur_label = ctk.CTkLabel(cur_frame, image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", compound="top")
+    cur_label = ctk.CTkLabel(cur_frame, image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}", text_color=TEXT_COLOR, font=FONT, compound="top")
     cur_label.pack(padx=20, pady=20)
-    twoFA_entry = ctk.CTkEntry(cur_frame, placeholder_text="Enter 2FA Code Here", width=200, height=35, border_width=2, corner_radius=10)
+    twoFA_entry = ctk.CTkEntry(cur_frame, placeholder_text="Enter 2FA Code Here", fg_color=FIRST_COLOR, border_color=THIRD_COLOR, placeholder_text_color=TEXT_COLOR, text_color=TEXT_COLOR, font=FONT, width=200, height=35, border_width=2, corner_radius=10)
     twoFA_entry.pack(padx=20,pady=0)
     def submit_2FA():
         code_2FA = twoFA_entry.get()
@@ -107,7 +333,7 @@ def setup2FA(yb, nb, success_function=None) -> None:
         else:
             cur_label.configure(image=qr_code_image, text=f"Manual 2FA Key: {twoFA_key}" + "\nIncorrect code", compound="top")
             twoFA_entry.delete(0, "end")
-    submit_2FA_b = ctk.CTkButton(cur_frame, text="Submit", command=submit_2FA)
+    submit_2FA_b = ctk.CTkButton(cur_frame, text="Submit", command=submit_2FA, fg_color=FOURTH_COLOR, text_color=TEXT_COLOR, font=FONT, hover=False)
     submit_2FA_b.pack(padx=20, pady=10)
     cur_label.image = qr_code_image
     cur_prompt.grab_set()
@@ -115,14 +341,14 @@ def setup2FA(yb, nb, success_function=None) -> None:
 def recover_account(rec_button, previous_prompt, success_function) -> None:
     previous_prompt.destroy()
     rec_button.pack_forget()
-    recover_prompt = ctk.CTkToplevel()
+    recover_prompt = ctk.CTkToplevel(fg_color=FIRST_COLOR)
     recover_prompt.title("Recover Account")
     recover_prompt.geometry("720x480")
-    recover_frame = ctk.CTkFrame(recover_prompt)
+    recover_frame = ctk.CTkFrame(recover_prompt, fg_color=SECOND_COLOR)
     recover_frame.pack(padx=20, pady=20)
-    recover_label = ctk.CTkLabel(recover_frame, text="Enter the recovery key that was provided during setup")
+    recover_label = ctk.CTkLabel(recover_frame, text="Enter the recovery key that was provided during setup", font=FONT, text_color=TEXT_COLOR)
     recover_label.pack(padx=20, pady=20)
-    recover_entry = ctk.CTkEntry(recover_frame, placeholder_text="Enter Recovery Key Here")
+    recover_entry = ctk.CTkEntry(recover_frame, placeholder_text="Enter Recovery Key Here", placeholder_text_color=TEXT_COLOR, text_color=TEXT_COLOR, font=FONT, fg_color=FIRST_COLOR, border_color=THIRD_COLOR)
     recover_entry.pack(padx=20, pady=20)
     def submit_recovery_key():
         successful = check_recovery_key(recover_entry.get())
@@ -132,7 +358,7 @@ def recover_account(rec_button, previous_prompt, success_function) -> None:
         else:
             recover_label.configure(text="Incorrect recovery key")
             recover_entry.delete(0, "end")
-    submit_key = ctk.CTkButton(recover_frame, text="Submit", command=submit_recovery_key)
+    submit_key = ctk.CTkButton(recover_frame, text="Submit", command=submit_recovery_key, font=FONT, text_color=TEXT_COLOR, fg_color=FOURTH_COLOR, hover=False)
     submit_key.pack(padx=20, pady=20)
     recover_prompt.grab_set()
 
@@ -155,7 +381,7 @@ def check_base() -> str:
     if os.path.exists("manager.json"):
         grant_perms("manager.json")
         key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
-        base = storage_data[0]["yes"]
+        base = storage_data["yes"]
         re_enc_file(key, re_enc_data, storage_data, "manager.json")
         rm_perms("manager.json")
     else:
@@ -173,22 +399,22 @@ def check_strength(criteria: str, entry_widget, entry_label) -> None:
         length = int(current_input)
         if criteria == "Password Length":
             if length < 8:
-                entry_label.configure(text="Password is too short", text_color="red")
+                entry_label.configure(text="Password is too short")
             elif length >= 8 and length < 16:
-                entry_label.configure(text="Ok", text_color="yellow")
+                entry_label.configure(text="Ok")
             elif length > 15 and length < 65:
-                entry_label.configure(text="Strong", text_color="green")
+                entry_label.configure(text="Strong")
             elif length > 64:
-                entry_label.configure(text="Password is too long", text_color="red")
+                entry_label.configure(text="Password is too long")
             else:
                 entry_label.configure(text="")
         else:
             if length <= 2:
-                entry_label.configure(text="Weak", text_color="red")
+                entry_label.configure(text="Weak")
             elif length >=3 and length < 5:
-                entry_label.configure(text="Ok", text_color="yellow")
+                entry_label.configure(text="Ok")
             elif length >= 5:
-                entry_label.configure(text="Strong", text_color="green")
+                entry_label.configure(text="Strong")
             else:
                 entry_label.configure(text="")
     else:
@@ -213,19 +439,19 @@ def generate_passyword(selection: list, length) -> str:
     symbols_length = ''
     for i in range(len(selection)):
         if i == 0:
-            if selection[0][1] != '':
+            if selection[0][1] not in ("# of Letters", ''):
                 letters_length = int(selection[0][1])
                 selection_length += letters_length
             if selection[0][0] == 1:
                 selected.append("Letters")
         elif i == 1:
-            if selection[1][1] != '':
+            if selection[1][1] not in ("# of Numbers", ''):
                 numbers_length = int(selection[1][1])
                 selection_length += numbers_length
             if selection[1][0]:
                 selected.append("Numbers")
         elif i == 2:
-            if selection [2][1] != '':
+            if selection [2][1] not in ("# of Symbols", ''):
                 symbols_length = int(selection[2][1])
                 selection_length += symbols_length
             if selection[2][0] == 1:
@@ -234,7 +460,7 @@ def generate_passyword(selection: list, length) -> str:
         return f"Password length and requested characters don't match ({passy_length} vs {selection_length})" 
     elif selection[0][0] == 0 and selection [1][0] == 0 and selection [2][0] == 0:
         return "Password criteria hasn't been selected"
-    elif selection[0][1] == '' and selection [1][1] == '' and selection [2][1] == '' and selection[0][0] == 1 and selection [1][0] == 1 and selection [2][0] == 1:
+    elif selection[0][1] == "# of Letters" and selection [1][1] == "# of Numbers" and selection [2][1] == "# of Symbols" and selection[0][0] == 1 and selection [1][0] == 1 and selection [2][0] == 1:
         passyword = ''.join(random.choice(string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]{};:,.?/") for _ in range(passy_length))
         return passyword
     else:
@@ -258,18 +484,18 @@ def generate_passyword(selection: list, length) -> str:
             elif char_type == "Symbols":
                 passyword += ''.join(random.choice("!@#$%^&*()-_=+[]{};:,.?/") for _ in range(random_amount))
             remaining -= random_amount
-    return passyword
+    passyword = list(passyword)
+    random.shuffle(passyword)
+    return ''.join(passyword)
 
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
     base = check_base()
     enter_helper()
-    try:
+    if os.path.exists("manager.json"):
         grant_perms("manager.json")
         key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
-        with open("manager.json", "r") as file:
-            data = json.load(file)
-        desc_section = data[0]["data"]
+        desc_section = storage_data["data"]
         for description in desc_section:
             existing_descs = {d["desc"] for d in desc_section}
             if desc not in existing_descs:
@@ -280,9 +506,7 @@ def store(word: str, desc: str) -> None:
                     i += 1
                 final_desc = f"{desc} ({i})"
             desc = final_desc
-        re_enc_file(key, re_enc_data, storage_data, "manager.json")
-    except:
-        pass
+    exit_helper()
     if base == "z":
         yes = PM_Z(word, desc)
     elif base == "y":
@@ -292,9 +516,6 @@ def store(word: str, desc: str) -> None:
     yes.setup()
     yes.encrypt()
     yes.save_info()
-    rm_perms("manager.json")
-    exit_helper()
-
 
 # Deletes a password that the user stored. Will return certain numbers depending if it was successful or not.
 def delete(word: str, desc: str) -> int:
@@ -313,7 +534,7 @@ def delete(word: str, desc: str) -> int:
             enter_helper()
             grant_perms("manager.json")
             key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
-            storage_data[0]["data"] = [entry for entry in storage_data[0]["data"] if entry.get('desc') != desc]
+            storage_data["data"] = [entry for entry in storage_data["data"] if entry.get('desc') != desc]
             re_enc_file(key, re_enc_data, storage_data, "manager.json")
             rm_perms("manager.json")
             exit_helper()
@@ -347,7 +568,7 @@ def access():
     try:
         grant_perms("manager.json")
         key, re_encrypt_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
-        data_section = storage_data[0]["data"]
+        data_section = storage_data["data"]
         re_enc_file(key, re_encrypt_data, storage_data, "manager.json")
         exit_helper()
     except FileNotFoundError:
@@ -369,7 +590,6 @@ def set_master(master_p: str) -> None:
     hashed_master = base64.b64encode(hashed_master).decode("utf-8")
     info = {
         "salt" : user_salt,
-        "saltier": salt_again,
         "hash" : hashed_master
     }
     data = []
@@ -393,14 +613,12 @@ def set_master(master_p: str) -> None:
                 data_entry["salt"] = user_salt
             if "hash" in data_entry:
                 data_entry["hash"] = hashed_master
-            if "saltier" in data_entry:
-                data_entry["saltier"] = salt_again
         with open("master.json", "w") as file:
             json.dump(data, file, indent=4)
         rm_perms("master.json")
         exit_helper()
 
-def save_recover_key(recover_key: str):
+def save_recovery_key(recover_key: str):
     user_salt = bcrypt.gensalt()
     hashed_rec_key = bcrypt.hashpw(recover_key.encode(), user_salt)
     user_salt = base64.b64encode(user_salt).decode("utf-8")
@@ -430,11 +648,11 @@ def import_info(merge_decision, master_passyword: str) -> str:
     if file_path:
         try:
             given_key, given_re_enc_data, given_storage_data = dec_file(master_passyword, main_work.AUTH_TYPE, file_path)
-            if given_key != "Incorrect master password or failed 2FA authentication" and given_storage_data[0]["exported_by"] == "PM" and (given_storage_data[0]["yes"] in ("z", "y", "x")):
-                base = given_storage_data[0]["yes"]
-                passyword_count = len(given_storage_data[0]["data"])
+            if given_key != "Incorrect master password or failed 2FA authentication" and given_storage_data["exported_by"] == "PM" and given_storage_data["yes"] in ("x", "y", "z"):
+                base = given_storage_data["yes"]
+                passyword_count = len(given_storage_data["data"])
                 for i in range(passyword_count):
-                    data_section = given_storage_data[0]["data"][i]
+                    data_section = given_storage_data["data"][i]
                     if base == "z":
                         try:
                             assert data_section["desc"] not in [None, '']
@@ -443,7 +661,7 @@ def import_info(merge_decision, master_passyword: str) -> str:
                             assert data_section["cipher_t"] not in [None, '']
                             assert data_section["tag"] not in [None, '']
                         except AssertionError:
-                            return "The file selected was not exported by this program or has been corrupted"
+                            return "The file selected was not exported by this program or has been corrupted since 1987", "Error"
                     elif base == "y":
                         try:
                             assert data_section["desc"] not in [None, '']
@@ -451,7 +669,7 @@ def import_info(merge_decision, master_passyword: str) -> str:
                             assert data_section["key"] not in [None, '']
                             assert data_section["iv"] not in [None, '']
                         except AssertionError:
-                            return "The file selected was not exported by this program or has been corrupted"
+                            return "The file selected was not exported by this program or has been corrupted since 1987", "Error"
                     elif base == "x":
                         try:
                             assert data_section["desc"] not in [None, '']
@@ -459,18 +677,22 @@ def import_info(merge_decision, master_passyword: str) -> str:
                             assert data_section["key"] not in [None, '']
                             assert data_section["non"] not in [None, '']
                         except AssertionError:
-                            return "The file selected was not exported by this program or has been corrupted"
+                            return "The file selected was not exported by this program or has been corrupted since 1987", "Error"
+            elif given_storage_data["exported_by"] != "PM" or given_storage_data["yes"] not in ("z", "y", "x"):
+                return "The file selected was not exported by this program or has been corrupted", "Error"
             else:
                 return "The master password is incorrect", None
         except cryptography.fernet.InvalidToken:
             return "The master password is incorrect", None
+        except UnboundLocalError:
+            return "The file selected was not exported by this program or has been corrupted", "Error"
     else:
         message = "The file selected does not exist"
         return message, file_path
     if merge_decision:
         file_base = check_base()
-        export_base = given_storage_data[0]["yes"]
-        export_data = given_storage_data[0]["data"]
+        export_base = given_storage_data["yes"]
+        export_data = given_storage_data["data"]
         enter_helper()
         try:
             grant_perms("manager.json")
@@ -488,7 +710,7 @@ def import_info(merge_decision, master_passyword: str) -> str:
             except:
                 message = "The file selected was not exported by this program or has been corrupted"
             return message, file_path
-        current_descs = [desc.get('desc') for desc in storage_data[0]["data"]]
+        current_descs = [desc.get('desc') for desc in storage_data["data"]]
         current_descs = set(current_descs)
         for data_section in export_data:
             description = data_section["desc"]
@@ -544,7 +766,7 @@ def export_info_enc() -> str:
     if os.path.exists("manager.json"):
         key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
         exit_helper()
-        if len(storage_data[0]["data"]) == 0:
+        if len(storage_data["data"]) == 0:
             message = "There are no passwords currently stored"
             return message, None
     else:
@@ -570,6 +792,22 @@ def export_info_enc() -> str:
         message = "The file or path specified does not exist"
     return message, file_path
 
+def wipe_passywords() -> str:
+    enter_helper()
+    if os.path.exists("manager.json"):
+        grant_perms("manager.json")
+        key, re_enc_data, storage_data = dec_file(main_work.QUI, "master", "manager.json")
+        if len(storage_data["data"]) == 0:
+            exit_helper()
+            return "There are no passwords to delete (try storing some)"
+        storage_data["data"] = []
+        re_enc_file(key, re_enc_data, storage_data, "manager.json")
+        rm_perms("manager.json")
+        exit_helper()
+        return "Passwords have been successfully wiped"
+    else:
+        exit_helper()
+        return "There are no passwords to delete (try storing some)"
 
 # Used to check if the user has already gone through the setup phase.
 def first_time() -> bool:
@@ -590,24 +828,26 @@ def present() -> bool:
 
 # Used for the main window instead of sub windows
 def big_yes_no_buttons(framework, conf_type):
-    yes_button = ctk.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision))
+    yes_button = ctk.CTkButton(master=framework, text="Yes", command=lambda decision=1: conf_type(decision), text_color=TEXT_COLOR, font=FONT, fg_color=FOURTH_COLOR, hover=False)
     yes_button.place(relx=0.35, rely=0.6, anchor=tkinter.CENTER)
-    no_button = ctk.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision))
+    no_button = ctk.CTkButton(master=framework, text="No", command=lambda decision=0: conf_type(decision), text_color=TEXT_COLOR, font=FONT, fg_color=FOURTH_COLOR, hover=False)
     no_button.place(relx=0.65, rely=0.6, anchor=tkinter.CENTER)
     return yes_button, no_button
 
 # Used for subwindows that provide the user with two options to choose from
 def binary_buttons(framework, conf_type, b1, b2):
-    yes_button = ctk.CTkButton(master=framework, text=b1, command=lambda decision=1: conf_type(decision))
+    yes_button = ctk.CTkButton(master=framework, text=b1, command=lambda decision=1: conf_type(decision), text_color=TEXT_COLOR, font=FONT, fg_color=FOURTH_COLOR, hover=False)
     yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
-    no_button = ctk.CTkButton(master=framework, text=b2, command=lambda decision=0: conf_type(decision))
+    no_button = ctk.CTkButton(master=framework, text=b2, command=lambda decision=0: conf_type(decision), text_color=TEXT_COLOR, font=FONT, fg_color=FOURTH_COLOR, hover=False)
     no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
     return yes_button, no_button
 
 def load_lockout_data():
     enter_helper()
     if os.path.exists("lockout.json"):
+        grant_perms("lockout.json")
         with open("lockout.json", "r") as f:
+            rm_perms("lockout.json")
             exit_helper()
             return json.load(f)
     exit_helper()
@@ -615,18 +855,46 @@ def load_lockout_data():
 
 def save_lockout_data(attempts: int, remaining: int):
     enter_helper()
+    if os.path.exists("lockout.json"):
+        grant_perms("lockout.json")
     with open("lockout.json", "w") as f:
         json.dump({"attempts": attempts, "remaining": remaining}, f)
+    rm_perms("lockout.json")
     exit_helper()
 
 def clear_lockout():
     enter_helper()
     if os.path.exists("lockout.json"):
+        grant_perms("lockout.json")
         os.remove("lockout.json")
     exit_helper()
 
+class HoverTooltip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip = None
+        widget.bind("<Enter>", self.on_enter)
+        widget.bind("<Leave>", self.on_leave)
+
+    def on_enter(self, event):
+        x, y, _, _ = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx()
+        y += self.widget.winfo_rooty() + 20
+        self.tooltip = tkinter.Toplevel(self.widget)
+        self.tooltip.wm_overrideredirect(True)
+        self.tooltip.wm_geometry(f"+{x}+{y}")
+        label = tkinter.Label(self.tooltip, text=self.text, background="lightyellow", relief="solid", borderwidth=1, wraplength=300)
+        label.pack()
+
+    def on_leave(self, event):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+
 def main():
-    return
+    enter_helper()
+    grant_perms("master.json")
 
 if __name__ == "__main__":
     main()
