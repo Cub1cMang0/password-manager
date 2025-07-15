@@ -4,7 +4,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.fernet import Fernet
-import os, sys, string, random
+import os, sys, string, random, stat
 import json
 import bcrypt
 import ctypes
@@ -17,6 +17,12 @@ from hashlib import sha256
 
 QUI = None
 AUTH_TYPE = None
+
+if sys.platform == "win32":
+    SW_HIDE = 0
+    CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW
+else:
+    CREATE_NO_WINDOW = 0
 
 # Idk why I have this. I might delete it later since I'll give the user the hidden dir in the repo
 def hidden_dir(dir_name: str) -> None:
@@ -98,18 +104,22 @@ def check_recovery_key(recovery_key) -> bool:
         return False
 
 # Remvoes file permissions to the given file
-def rm_perms(item: str) -> None:
+def rm_perms(file: str) -> None:
     if sys.platform == "win32":
         subprocess.run(
-            ["icacls", item, "/inheritance:r"],
+            ["icacls", file, "/inheritance:r"],
             check=True, 
-            stdout=subprocess.DEVNULL)
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW)
         subprocess.run(
-            ["icacls", item, "/deny", "Everyone:F"], 
+            ["icacls", file, "/deny", "Everyone:F"], 
             check=True,
-            stdout=subprocess.DEVNULL)
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW)
     else:
-        os.chmod(item, 0)
+        os.chmod(file, 0)
 
 # Grants file permissions to the given file
 def grant_perms(item: str):
@@ -117,7 +127,9 @@ def grant_perms(item: str):
         subprocess.run(
             ["icacls", item, "/grant", "Everyone:F"], 
             check=True, 
-            stdout=subprocess.DEVNULL
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW
         )
     else:
         os.chmod(item, stat.S_IXUSR)
@@ -216,7 +228,7 @@ def re_enc_file(v_key: bytes, complete: dict, new_data: dict, file_location: str
         json.dump(complete_data, file, indent=4)
 
 # AES algorithm
-class PM_Z:    
+class POM_Z:    
     def __init__(self, password: str, description: str):
         if password != None and description != None:
             self.password = password.encode()
@@ -261,7 +273,7 @@ class PM_Z:
             exit_helper()
         else:
             meta_data = {
-                "exported_by": "PM",
+                "exported_by": "POM",
                 "data": [data],
                 "yes": "z"
             }
@@ -291,7 +303,7 @@ class PM_Z:
             exit_helper()
             return False
 
-class PM_Y:
+class POM_Y:
     def __init__(self, password: str, description: str):
         if password != None and description != None:
             self.password = password.encode()
@@ -330,7 +342,7 @@ class PM_Y:
             exit_helper()
         else:
             meta_data = {
-                "exported_by": "PM",
+                "exported_by": "POM",
                 "data": [data],
                 "yes": "y"
             }
@@ -358,7 +370,7 @@ class PM_Y:
             exit_helper()
             return False
 
-class PM_X:
+class POM_X:
     def __init__(self, password: str, description: str):
         if password != None and description != None:
             self.password = password.encode()
@@ -401,7 +413,7 @@ class PM_X:
             exit_helper()
         else:
             meta_data = {
-                "exported_by": "PM",
+                "exported_by": "POM",
                 "data": [data],
                 "yes": "x"
             }
