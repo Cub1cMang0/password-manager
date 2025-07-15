@@ -1,17 +1,15 @@
-import tkinter.colorchooser
-from main_work import *
 import main_work
 from math import floor
 import pygetwindow
-import time
-import pyotp, qrcode, shutil
+import base64
+import pyotp, qrcode, shutil, bcrypt, subprocess
 import customtkinter as ctk
 import tkinter
-from tkinter import *
-from tkinter import filedialog
+import tkinter.colorchooser
 from PIL import Image
-import pyperclip
+import pyperclip, random, string, json, os, sys
 import cryptography, secrets
+
 
 FIRST_COLOR = None
 SECOND_COLOR = None
@@ -69,6 +67,31 @@ def update_theme(theme_color: str) -> None:
         FOURTH_COLOR = "#F7F6F4"
     return FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR
 
+def no_theme() -> None:
+    global FIRST_COLOR
+    global SECOND_COLOR
+    global THIRD_COLOR
+    global FOURTH_COLOR
+    global TEXT_COLOR
+    if ctk.get_appearance_mode() == "Dark":
+        if FIRST_COLOR == None:
+            FIRST_COLOR = "#242424"
+        if SECOND_COLOR == None:
+            SECOND_COLOR = "#2b2b2b"
+        if THIRD_COLOR == None:
+            THIRD_COLOR = "#1d1e1e"
+        TEXT_COLOR = "#FFFFFF"
+    else:
+        if FIRST_COLOR == None:
+            FIRST_COLOR = "#f9f9fa"
+        if SECOND_COLOR == None:
+            SECOND_COLOR = "#dbdbdb"
+        if THIRD_COLOR == None:
+            THIRD_COLOR = "#ebebeb"
+        TEXT_COLOR = "#000000"
+    if FOURTH_COLOR == None:
+        FOURTH_COLOR = "#1f6aa5"
+
 # Sets the selected them to all CTk objects
 def set_theme(widget):
     for child in widget.winfo_children():
@@ -95,8 +118,8 @@ def color_change(color: str, app) -> None:
 
 # Save the user's selected theme
 def save_theme() -> None:
-    enter_helper()
-    grant_perms("master.json")
+    main_work.enter_helper()
+    main_work.grant_perms("master.json")
     with open("master.json", "r") as file:
         data = json.load(file)
     first_theme = True
@@ -109,14 +132,14 @@ def save_theme() -> None:
         data.append(new_theme)
     with open("master.json", "w") as new_file:
         json.dump(data, new_file, indent=4)
-    rm_perms("master.json")
-    exit_helper()
+    main_work.rm_perms("master.json")
+    main_work.exit_helper()
 
 # Loads in the user's previously selected color theme
-def load_theme() -> tuple[str, str, str, str]:
-    enter_helper()
+def load_theme(app) -> tuple[str, str, str, str]:
+    main_work.enter_helper()
     if os.path.exists("master.json"):
-        grant_perms("master.json")
+        main_work.grant_perms("master.json")
         with open("master.json", "r") as file:
             data = json.load(file)
         global FIRST_COLOR
@@ -130,12 +153,14 @@ def load_theme() -> tuple[str, str, str, str]:
                     break
         except:
             FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR = (None, None, None, None)
-        rm_perms("master.json")
-        exit_helper()
-        return FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR
+        main_work.rm_perms("master.json")
+        main_work.exit_helper()
     else:
-        exit_helper()
-        return None, None, None, None
+        main_work.exit_helper()
+        FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR = (None, None, None, None)
+    no_theme()
+    set_theme(app)
+    return FIRST_COLOR, SECOND_COLOR, THIRD_COLOR, FOURTH_COLOR
 
 def update_font(font_name: str) -> None:
     global FONT
@@ -143,7 +168,6 @@ def update_font(font_name: str) -> None:
 
 # Sets the user's selected font to all CTk Objects (at least the ones that utilize the font attribute)
 def set_font(font_name, widget):
-    update_font(font_name)
     for child in widget.winfo_children():
         if getattr(child, "no_font", False):
             continue
@@ -153,21 +177,19 @@ def set_font(font_name, widget):
 
 # Set the user's selected text color to all CTk objects (at least the ones that utilize the font attribute)
 def text_color_change(text_color: str, widget):
-    global TEXT_COLOR
-    TEXT_COLOR = text_color
     for child in widget.winfo_children():
         if isinstance(child, (ctk.CTkButton, ctk.CTkLabel, ctk.CTkTextbox)):
-            child.configure(text_color=TEXT_COLOR)
+            child.configure(text_color=text_color)
         elif isinstance(child, ctk.CTkEntry):
-            child.configure(text_color=TEXT_COLOR, placeholder_text_color=TEXT_COLOR)
-        text_color_change(TEXT_COLOR, child)
+            child.configure(text_color=text_color, placeholder_text_color=text_color)
+        text_color_change(text_color, child)
 
 # Save text info from the user's theme
 def save_text_info() -> None:
     global FONT
     global TEXT_COLOR
-    enter_helper()
-    grant_perms("master.json")
+    main_work.enter_helper()
+    main_work.grant_perms("master.json")
     with open("master.json", "r") as file:
         data = json.load(file)
     first_text_theme = True
@@ -180,14 +202,14 @@ def save_text_info() -> None:
         data.append(text_data)
     with open("master.json", "w") as new_file:
         json.dump(data, new_file, indent=4)
-    rm_perms("master.json")
-    exit_helper()
+    main_work.rm_perms("master.json")
+    main_work.exit_helper()
 
 # Loads the user's text theme
-def load_text_theme() -> tuple[str, str]:
-    enter_helper()
+def load_text_theme(app) -> tuple[str, str]:
+    main_work.enter_helper()
     if os.path.exists("master.json"):
-        grant_perms("master.json")
+        main_work.grant_perms("master.json")
         with open("master.json", "r") as file:
             data = json.load(file)
         global FONT
@@ -196,18 +218,23 @@ def load_text_theme() -> tuple[str, str]:
             for section in data:
                 if "text_theme" in section:
                     FONT, TEXT_COLOR = section["text_theme"]
-                    FONT = ctk.CTkFont(family=FONT, weight="normal")
                     break
         except:
-            FONT, TEXT_COLOR = (None, None)
-        rm_perms("master.json")
-        exit_helper()
-        return FONT, TEXT_COLOR
+            FONT = None
+        main_work.rm_perms("master.json")
+        main_work.exit_helper()
     else:
-        exit_helper()
-        return None, None
+        main_work.exit_helper()
+        FONT = None
+    if FONT == None:
+        FONT = "Arial"
+    update_font(FONT)
+    set_font(FONT, app)
+    text_color_change(TEXT_COLOR, app)
+    return FONT, TEXT_COLOR
 
 def save_font_theme(font_name, app) -> None:
+    update_font(font_name)
     set_font(font_name, app)
     save_text_info()
 
@@ -218,6 +245,7 @@ def save_text_theme(text_color: str, app) -> None:
 # Set the user's custom color to the GUI's section (i.e. CTkFrame/CTkScrollableFrame, CTkButton, etc.)
 def customize_section_color(section: str, app) -> None: 
     chosen_color = tkinter.colorchooser.askcolor(title="Choose Color")
+    no_theme()
     if chosen_color[1]:
         if section == "Background/Entry":
             global FIRST_COLOR
@@ -232,6 +260,14 @@ def customize_section_color(section: str, app) -> None:
             global FOURTH_COLOR
             FOURTH_COLOR = chosen_color[1]
         set_theme(app)
+        save_theme()
+
+def customize_text_color(app) -> None:
+    chosen_color = tkinter.colorchooser.askcolor(title="Choose Color")
+    if chosen_color[1]:
+        global TEXT_COLOR
+        TEXT_COLOR = chosen_color[1]
+        save_text_theme(TEXT_COLOR, app)
 
 def save_custom_colors(section: str, app) -> None:
     customize_section_color(section, app)
@@ -240,30 +276,30 @@ def save_custom_colors(section: str, app) -> None:
 
 # Returns a PIL.Image of the qr code setup for 2FA.
 def open_image():
-    enter_helper()
+    main_work.enter_helper()
     image = Image.open("setup.png")
-    exit_helper()
+    main_work.exit_helper()
     return image
 
 # Provides the user with a QR Code and url to set up 2FA on their phone, computer, or whatever.
 def setup_qr_code_image() -> str:
-    enter_helper()
+    main_work.enter_helper()
     key = pyotp.random_base32()
     uri = pyotp.totp.TOTP(key).provisioning_uri(
         name='2FA',
-        issuer_name='PM')
+        issuer_name='POM')
     qrcode.make(uri).save("setup.png")
-    exit_helper()
+    main_work.exit_helper()
     return key
 
 # Standard 2FA check for security
 def check_2FA(code: int) -> bool:
-    enter_helper()
-    grant_perms("master.json")
+    main_work.enter_helper()
+    main_work.grant_perms("master.json")
     with open("master.json", "r") as file:
         data = json.load(file)
-    rm_perms("master.json")
-    exit_helper()
+    main_work.rm_perms("master.json")
+    main_work.exit_helper()
     source = None
     for section in data:
         if "2FA" in section:
@@ -274,27 +310,32 @@ def check_2FA(code: int) -> bool:
 
 # 2FA disabling logic
 def disable_2FA() -> None:
-    enter_helper()
-    grant_perms("master.json")
+    main_work.enter_helper()
+    main_work.grant_perms("master.json")
     with open("master.json", "r") as file:
         data = json.load(file)
-    salt_holder = ''
-    hash_holder = ''
     for section in data:
-        if "salt" in section:
-            salt_holder = section["salt"]
-        if "hash" in section:
-            hash_holder = section["hash"]
-    no_2FA_data = {
-        "salt": salt_holder,
-        "hash": hash_holder
-    }
-    new_data = []
-    new_data.append(no_2FA_data)
+        if "2FA" in section:
+            section.pop("2FA", None)
+    data = [section for section in data if section]
     with open("master.json", "w") as file:
-        json.dump(new_data, file, indent=4)
-    rm_perms("master.json")
-    exit_helper()
+        json.dump(data, file, indent=4)
+    main_work.rm_perms("master.json")
+    main_work.exit_helper()
+
+# Used to set custom taskbar icon to CTkToplevel windows
+def set_toplevel_icon(window):
+    if sys.platform == "win32":
+        icon_path = os.path.join(os.getcwd(), "mini_icons", "app_icon.ico")
+        window.after(250, lambda: window.iconbitmap(icon_path))
+    else:
+
+        icon_path = os.path.join(os.getcwd(), "mini_icons", "app_icon.png")
+        try:
+            image = tk.PhotoImage(file=icon_path)
+            window.after(250, lambda: window.iconphoto(False, image))
+        except Exception as e:
+            print(f"Failed to set iconphoto: {e}")
 
 # Since 2FA can be enabled later and startup, it makes sense to create a function for it
 def setup2FA(yb, nb, success_function=None) -> None:
@@ -304,6 +345,7 @@ def setup2FA(yb, nb, success_function=None) -> None:
     qr_code = open_image()
     qr_code_image = ctk.CTkImage(light_image=qr_code, dark_image=qr_code, size=(550, 550))
     cur_prompt = ctk.CTkToplevel(fg_color=FIRST_COLOR)
+    set_toplevel_icon(cur_prompt)
     cur_prompt.title("Setup 2FA")
     cur_prompt.geometry("700x790")
     cur_frame = ctk.CTkFrame(cur_prompt, fg_color=SECOND_COLOR)
@@ -317,16 +359,16 @@ def setup2FA(yb, nb, success_function=None) -> None:
         totp = pyotp.TOTP(twoFA_key)
         successful = totp.verify(code_2FA)
         if successful:
-            enter_helper()
-            grant_perms("master.json")
+            main_work.enter_helper()
+            main_work.grant_perms("master.json")
             with open("master.json", "r") as file:
                 data = json.load(file)
             twoFA = {"2FA" : twoFA_key}
             data.append(twoFA)
             with open("master.json", "w") as file:
                 json.dump(data, file, indent=4)
-            rm_perms("master.json")
-            exit_helper()
+            main_work.rm_perms("master.json")
+            main_work.exit_helper()
             cur_prompt.destroy()
             if not isinstance(success_function, type(None)):
                 success_function()
@@ -342,16 +384,17 @@ def recover_account(rec_button, previous_prompt, success_function) -> None:
     previous_prompt.destroy()
     rec_button.pack_forget()
     recover_prompt = ctk.CTkToplevel(fg_color=FIRST_COLOR)
+    set_toplevel_icon(recover_prompt)
     recover_prompt.title("Recover Account")
     recover_prompt.geometry("720x480")
     recover_frame = ctk.CTkFrame(recover_prompt, fg_color=SECOND_COLOR)
-    recover_frame.pack(padx=20, pady=20)
+    recover_frame.pack(padx=100, pady=100, expand=True, fill="both")
     recover_label = ctk.CTkLabel(recover_frame, text="Enter the recovery key that was provided during setup", font=FONT, text_color=TEXT_COLOR)
     recover_label.pack(padx=20, pady=20)
     recover_entry = ctk.CTkEntry(recover_frame, placeholder_text="Enter Recovery Key Here", placeholder_text_color=TEXT_COLOR, text_color=TEXT_COLOR, font=FONT, fg_color=FIRST_COLOR, border_color=THIRD_COLOR)
     recover_entry.pack(padx=20, pady=20)
     def submit_recovery_key():
-        successful = check_recovery_key(recover_entry.get())
+        successful = main_work.check_recovery_key(recover_entry.get())
         if successful:
             recover_prompt.destroy()
             success_function()
@@ -364,10 +407,10 @@ def recover_account(rec_button, previous_prompt, success_function) -> None:
 
 
 def retrieve_2FA_key() -> str:
-    enter_helper()
+    main_work.enter_helper()
     with open("manager.json", "r") as file:
         data = json.load(file)
-    exit_helper()
+    main_work.exit_helper()
     return data["saltier"]
 
 # Selects an algorithm for the password managing logic (and to stick to)
@@ -377,16 +420,16 @@ def select_base() -> str:
     return rand_letter
 
 def check_base() -> str:
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("manager.json"):
-        grant_perms("manager.json")
-        key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+        main_work.grant_perms("manager.json")
+        key, re_enc_data, storage_data = main_work.dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
         base = storage_data["yes"]
-        re_enc_file(key, re_enc_data, storage_data, "manager.json")
-        rm_perms("manager.json")
+        main_work.re_enc_file(key, re_enc_data, storage_data, "manager.json")
+        main_work.rm_perms("manager.json")
     else:
         base = select_base()
-    exit_helper()
+    main_work.exit_helper()
     return base
 
 # General function to check password strength and to steer the user into making stronger passwords.
@@ -475,7 +518,7 @@ def generate_passyword(selection: list, length) -> str:
             remaining -= symbols_length
     if remaining != 0:
         while remaining != 0:
-            char_type = random.choice(selected)
+            char_type =random.choice(selected)
             random_amount = random.randint(1, remaining)
             if char_type == "Letters":
                 passyword += ''.join(random.choice(string.ascii_letters) for _ in range(random_amount))
@@ -491,10 +534,10 @@ def generate_passyword(selection: list, length) -> str:
 # Stores the user's given password in the hidden directory.
 def store(word: str, desc: str) -> None:
     base = check_base()
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("manager.json"):
-        grant_perms("manager.json")
-        key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+        main_work.grant_perms("manager.json")
+        key, re_enc_data, storage_data = main_work.dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
         desc_section = storage_data["data"]
         for description in desc_section:
             existing_descs = {d["desc"] for d in desc_section}
@@ -506,13 +549,13 @@ def store(word: str, desc: str) -> None:
                     i += 1
                 final_desc = f"{desc} ({i})"
             desc = final_desc
-    exit_helper()
+    main_work.exit_helper()
     if base == "z":
-        yes = PM_Z(word, desc)
+        yes = main_work.POM_Z(word, desc)
     elif base == "y":
-        yes = PM_Y(word, desc)
+        yes = main_work.POM_Y(word, desc)
     elif base == "x":
-        yes = PM_X(word, desc)
+        yes = main_work.POM_X(word, desc)
     yes.setup()
     yes.encrypt()
     yes.save_info()
@@ -521,23 +564,23 @@ def store(word: str, desc: str) -> None:
 def delete(word: str, desc: str) -> int:
     base = check_base()
     if base == "z":
-        yes = PM_Z(None, None)
+        yes = main_work.POM_Z(None, None)
     elif base == "y":
-        yes = PM_Y(None, None)
+        yes = main_work.POM_Y(None, None)
     elif base == "x":
-        yes = PM_X(None, None)
+        yes = main_work.POM_X(None, None)
     success = yes.load_info(desc)
     if success:
         yes.decrypt()
         check = yes.password.decode()
         if word == check:
-            enter_helper()
-            grant_perms("manager.json")
-            key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+            main_work.enter_helper()
+            main_work.grant_perms("manager.json")
+            key, re_enc_data, storage_data = main_work.dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
             storage_data["data"] = [entry for entry in storage_data["data"] if entry.get('desc') != desc]
-            re_enc_file(key, re_enc_data, storage_data, "manager.json")
-            rm_perms("manager.json")
-            exit_helper()
+            main_work.re_enc_file(key, re_enc_data, storage_data, "manager.json")
+            main_work.rm_perms("manager.json")
+            main_work.exit_helper()
             delete_result = 2
         else:
             delete_result = 3
@@ -549,11 +592,11 @@ def delete(word: str, desc: str) -> int:
 def fetch(desc: str) -> str:
     base = check_base()
     if base == "z":
-        yes = PM_Z(None, None)
+        yes = main_work.POM_Z(None, None)
     elif base == "y":
-        yes = PM_Y(None, None)
+        yes = main_work.POM_Y(None, None)
     elif base == "x":
-        yes = PM_X(None, None)
+        yes = main_work.POM_X(None, None)
     success = yes.load_info(desc)
     if success:
         yes.decrypt()
@@ -564,20 +607,20 @@ def fetch(desc: str) -> str:
 
 # Provides access to manager.json (specifically the sensative stuff)
 def access():
-    enter_helper()
+    main_work.enter_helper()
     try:
-        grant_perms("manager.json")
-        key, re_encrypt_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+        main_work.grant_perms("manager.json")
+        key, re_encrypt_data, storage_data = main_work.dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
         data_section = storage_data["data"]
-        re_enc_file(key, re_encrypt_data, storage_data, "manager.json")
-        exit_helper()
+        main_work.re_enc_file(key, re_encrypt_data, storage_data, "manager.json")
+        main_work.exit_helper()
     except FileNotFoundError:
         return None
     return data_section
 
 # Sets the user's master password
 def master(passyword: str) -> None:
-    enter_helper()
+    main_work.enter_helper()
     set_master(passyword)
 
 # Master password creation and storage logic
@@ -594,18 +637,18 @@ def set_master(master_p: str) -> None:
     }
     data = []
     data.append(info)
-    exit_helper()
-    if not is2FAsetup():
-        enter_helper()
+    main_work.exit_helper()
+    if not main_work.is2FAsetup():
+        main_work.enter_helper()
         if os.path.exists("master.json"):
-            grant_perms("master.json")
+            main_work.grant_perms("master.json")
         with open("master.json", "w") as file:
             json.dump(data, file, indent=4)
-        rm_perms("master.json")
-        exit_helper()
+        main_work.rm_perms("master.json")
+        main_work.exit_helper()
     else:
-        enter_helper()
-        grant_perms("master.json")
+        main_work.enter_helper()
+        main_work.grant_perms("master.json")
         with open("master.json", "r") as file:
             data = json.load(file)
         for data_entry in data:
@@ -615,8 +658,8 @@ def set_master(master_p: str) -> None:
                 data_entry["hash"] = hashed_master
         with open("master.json", "w") as file:
             json.dump(data, file, indent=4)
-        rm_perms("master.json")
-        exit_helper()
+        main_work.rm_perms("master.json")
+        main_work.exit_helper()
 
 def save_recovery_key(recover_key: str):
     user_salt = bcrypt.gensalt()
@@ -627,19 +670,19 @@ def save_recovery_key(recover_key: str):
         "rec_salt": user_salt,
         "rec_hash": hashed_rec_key,
     }
-    enter_helper()
-    grant_perms("master.json")
+    main_work.enter_helper()
+    main_work.grant_perms("master.json")
     with open("master.json", "r") as file:
         data = json.load(file)
     data.append(info)
     with open("master.json", "w") as new_file:
         json.dump(data, new_file, indent=4)
-    rm_perms("master.json")
-    exit_helper()
+    main_work.rm_perms("master.json")
+    main_work.exit_helper()
 
 # Import a file containing password (that was exported from the program) and give the user to merge passwords or override.
 def import_info(merge_decision, master_passyword: str) -> str:
-    file_path = filedialog.askopenfilename(
+    file_path = tkinter.filedialog.askopenfilename(
         defaultextension=".json",
         filetypes=[("JSON files", "*.json")],
         title="Import",
@@ -647,8 +690,8 @@ def import_info(merge_decision, master_passyword: str) -> str:
     )
     if file_path:
         try:
-            given_key, given_re_enc_data, given_storage_data = dec_file(master_passyword, main_work.AUTH_TYPE, file_path)
-            if given_key != "Incorrect master password or failed 2FA authentication" and given_storage_data["exported_by"] == "PM" and given_storage_data["yes"] in ("x", "y", "z"):
+            given_key, given_re_enc_data, given_storage_data = main_work.dec_file(master_passyword, main_work.AUTH_TYPE, file_path)
+            if given_key != "Incorrect master password or failed 2FA authentication" and given_storage_data["exported_by"] == "POM" and given_storage_data["yes"] in ("x", "y", "z"):
                 base = given_storage_data["yes"]
                 passyword_count = len(given_storage_data["data"])
                 for i in range(passyword_count):
@@ -678,10 +721,10 @@ def import_info(merge_decision, master_passyword: str) -> str:
                             assert data_section["non"] not in [None, '']
                         except AssertionError:
                             return "The file selected was not exported by this program or has been corrupted since 1987", "Error"
-            elif given_storage_data["exported_by"] != "PM" or given_storage_data["yes"] not in ("z", "y", "x"):
-                return "The file selected was not exported by this program or has been corrupted", "Error"
-            else:
+            elif given_key == "Incorrect master password or failed 2FA authentication":
                 return "The master password is incorrect", None
+            elif given_storage_data["exported_by"] != "POM" or given_storage_data["yes"] not in ("z", "y", "x"):
+                return "The file selected was not exported by this program or has been corrupted", "Error"
         except cryptography.fernet.InvalidToken:
             return "The master password is incorrect", None
         except UnboundLocalError:
@@ -693,20 +736,20 @@ def import_info(merge_decision, master_passyword: str) -> str:
         file_base = check_base()
         export_base = given_storage_data["yes"]
         export_data = given_storage_data["data"]
-        enter_helper()
+        main_work.enter_helper()
         try:
-            grant_perms("manager.json")
-            key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
-            rm_perms("manager.json")
-            exit_helper()
-        except FileNotFoundError:
+            main_work.grant_perms("manager.json")
+            key, re_enc_data, storage_data = main_work.dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+            main_work.rm_perms("manager.json")
+            main_work.exit_helper()
+        except subprocess.CalledProcessError:
             file_destination = os.getcwd()
             file_destination = os.path.join(file_destination, "manager.json")
             try:
                 shutil.copy2(file_path, file_destination)
                 message = "File successfully imported. Would you like to keep the exported file?"
-                rm_perms("manager.json")
-                exit_helper()
+                main_work.rm_perms("manager.json")
+                main_work.exit_helper()
             except:
                 message = "The file selected was not exported by this program or has been corrupted"
             return message, file_path
@@ -716,29 +759,29 @@ def import_info(merge_decision, master_passyword: str) -> str:
             description = data_section["desc"]
             if description in current_descs:
                 if file_base == "z":
-                    yes = PM_Z(None, None)
+                    yes = main_work.POM_Z(None, None)
                 elif file_base == "y":
-                    yes = PM_Y(None, None)
+                    yes = main_work.POM_Y(None, None)
                 elif file_base == "x":
-                    yes = PM_X(None, None)
+                    yes = main_work.POM_X(None, None)
                 yes.load_info(description)
                 yes.decrypt()
                 passyword = yes.password.decode()
                 description = description + " (imported)"
             else:
                 if export_base == "z":
-                    yes = PM_Z(None, None)
+                    yes = main_work.POM_Z(None, None)
                     yes.key = data_section["key"]
                     yes.nonce = data_section["non"]
                     yes.cipher_t = data_section["cipher_t"]
                     yes.auth_t = data_section["tag"]
                 elif export_base == "y":
-                    yes = PM_Y(None, None)
+                    yes = main_work.POM_Y(None, None)
                     yes.password = base64.b64decode(data_section["enc_k"])
                     yes.key = base64.b64decode(data_section["key"])
                     yes.iv = base64.b64decode(data_section["iv"])
                 elif export_base == "x":
-                    yes = PM_X(None, None)
+                    yes = main_work.POM_X(None, None)
                     yes.password = base64.b64decode(data_section["enc_k"])
                     yes.key = base64.b64decode(data_section["key"])
                     yes.nonce = base64.b64decode(data_section["non"])
@@ -748,13 +791,13 @@ def import_info(merge_decision, master_passyword: str) -> str:
             store(passyword, description)
         message = "File successfully imported. Would you like to keep the exported file?"
     elif not merge_decision:
-        enter_helper()
+        main_work.enter_helper()
         file_destination = os.getcwd()
         file_destination = os.path.join(file_destination, "manager.json")
         try:
             shutil.copy2(file_path, file_destination)
             message = "File successfully imported. Would you like to keep the exported file?"
-            exit_helper()
+            main_work.exit_helper()
         except:
             message = "The file selected was not exported by this program or has been corrupted"
     return message, file_path
@@ -762,68 +805,72 @@ def import_info(merge_decision, master_passyword: str) -> str:
 # Used to export the user's passwords encrypted with warning (its the only way to import passwords)
 def export_info_enc() -> str:
     message = ''
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("manager.json"):
-        key, re_enc_data, storage_data = dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
-        exit_helper()
+        key, re_enc_data, storage_data = main_work.dec_file(main_work.QUI, main_work.AUTH_TYPE, "manager.json")
+        main_work.exit_helper()
         if len(storage_data["data"]) == 0:
             message = "There are no passwords currently stored"
             return message, None
     else:
         message = "The file does not exist (Try storing some passwords)"
-        exit_helper()
+        main_work.exit_helper()
         return message, None
-    file_path = filedialog.asksaveasfilename(
+    file_path = tkinter.filedialog.asksaveasfilename(
         defaultextension=".json",
         filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         title="Export",
         initialfile="export.json"
     )
     if file_path:
-        enter_helper()
+        main_work.enter_helper()
         exported_file = os.path.join(os.getcwd(), "manager.json")
         try:
             shutil.copy2(exported_file, file_path)
             message = "File successfully exported"
         except:
             message = "The file or path specified does not exist or is corrupt"
-        exit_helper()
+        main_work.exit_helper()
     else:
         message = "The file or path specified does not exist"
     return message, file_path
 
 def wipe_passywords() -> str:
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("manager.json"):
-        grant_perms("manager.json")
-        key, re_enc_data, storage_data = dec_file(main_work.QUI, "master", "manager.json")
+        main_work.grant_perms("manager.json")
+        key, re_enc_data, storage_data = main_work.dec_file(main_work.QUI, "master", "manager.json")
         if len(storage_data["data"]) == 0:
-            exit_helper()
+            main_work.exit_helper()
             return "There are no passwords to delete (try storing some)"
         storage_data["data"] = []
-        re_enc_file(key, re_enc_data, storage_data, "manager.json")
-        rm_perms("manager.json")
-        exit_helper()
+        main_work.re_enc_file(key, re_enc_data, storage_data, "manager.json")
+        main_work.rm_perms("manager.json")
+        main_work.exit_helper()
         return "Passwords have been successfully wiped"
     else:
-        exit_helper()
+        main_work.exit_helper()
         return "There are no passwords to delete (try storing some)"
 
 # Used to check if the user has already gone through the setup phase.
 def first_time() -> bool:
-    enter_helper()
-    if os.path.exists("master.json"):
-        isFirst = False
+    if os.path.exists(".helper"):
+        main_work.enter_helper()
+        if os.path.exists("master.json"):
+            isFirst = False
+        else:
+            isFirst = True
+        main_work.exit_helper()
+        return isFirst
     else:
-        isFirst = True
-    exit_helper()
-    return isFirst
+        main_work.hidden_dir(".helper")
+        return True
 
 # Used to check for the presence of manager.json
 def present() -> bool:
-    enter_helper()
+    main_work.enter_helper()
     exists = os.path.exists("manager.json")
-    exit_helper()
+    main_work.exit_helper()
     return exists
 
 # Used for the main window instead of sub windows
@@ -837,37 +884,37 @@ def big_yes_no_buttons(framework, conf_type):
 # Used for subwindows that provide the user with two options to choose from
 def binary_buttons(framework, conf_type, b1, b2):
     yes_button = ctk.CTkButton(master=framework, text=b1, command=lambda decision=1: conf_type(decision), text_color=TEXT_COLOR, font=FONT, fg_color=FOURTH_COLOR, hover=False)
-    yes_button.pack(side=tkinter.LEFT, padx=(20, 10), pady=20)
+    yes_button.pack(side=tkinter.LEFT, padx=60, pady=20)
     no_button = ctk.CTkButton(master=framework, text=b2, command=lambda decision=0: conf_type(decision), text_color=TEXT_COLOR, font=FONT, fg_color=FOURTH_COLOR, hover=False)
-    no_button.pack(side=tkinter.RIGHT, padx=(10, 20), pady=20)
+    no_button.pack(side=tkinter.RIGHT, padx=60, pady=20)
     return yes_button, no_button
 
 def load_lockout_data():
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("lockout.json"):
-        grant_perms("lockout.json")
+        main_work.grant_perms("lockout.json")
         with open("lockout.json", "r") as f:
-            rm_perms("lockout.json")
-            exit_helper()
+            main_work.rm_perms("lockout.json")
+            main_work.exit_helper()
             return json.load(f)
-    exit_helper()
+    main_work.exit_helper()
     return {"attempts": 0, "remaining": 0}
 
 def save_lockout_data(attempts: int, remaining: int):
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("lockout.json"):
-        grant_perms("lockout.json")
+        main_work.grant_perms("lockout.json")
     with open("lockout.json", "w") as f:
         json.dump({"attempts": attempts, "remaining": remaining}, f)
-    rm_perms("lockout.json")
-    exit_helper()
+    main_work.rm_perms("lockout.json")
+    main_work.exit_helper()
 
 def clear_lockout():
-    enter_helper()
+    main_work.enter_helper()
     if os.path.exists("lockout.json"):
-        grant_perms("lockout.json")
+        main_work.grant_perms("lockout.json")
         os.remove("lockout.json")
-    exit_helper()
+    main_work.exit_helper()
 
 class HoverTooltip:
     def __init__(self, widget, text):
@@ -893,8 +940,9 @@ class HoverTooltip:
             self.tooltip = None
 
 def main():
-    enter_helper()
-    grant_perms("master.json")
+    main_work.enter_helper()
+    main_work.grant_perms("master.json")
+    main_work.grant_perms("manager.json")
 
 if __name__ == "__main__":
     main()
